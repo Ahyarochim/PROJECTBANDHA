@@ -4,18 +4,27 @@ from ultralytics import YOLO
 import struct
 import time
 
-IP_HP = "10.107.3.167"
+# ===============================
+#  Tambahin input IP Address
+# ===============================
+default_ip = "10.107.23.52"
+IP_HP = input(f"Masukkan IP HP (default = {default_ip}): ").strip()
+if IP_HP == "":
+    IP_HP = default_ip
+
 Port = 6000
 WIDTH, HEIGHT = 360, 260
 FPS = 15
 JPEG_QUALITY = 50
-MODEL_PATH = r'D:\Azqya Old Code 2\PY and NumPy\30 Day Plylist\Stream Without ffmpeg\best.pt'
+MODEL_PATH = r'C:\Users\Asus\Desktop\Bandhayudha Intern 2025\PY Bandhayudha 25\PROJECTBANDHA\qya\best.pt'
 MAX_PACKET_SIZE = 60000  
+
+print(f"[INFO] Streaming ke IP: {IP_HP}:{Port}")
 
 # Setup socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
-sock.settimeout(1.0) 
+sock.settimeout(1.0)
 
 Camera = cv2.VideoCapture(0)
 Camera.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
@@ -39,7 +48,6 @@ except Exception as e:
 frame_count = 0
 target_delay = 1.0 / FPS
 
-
 try:
     while True:
         start_time = time.time()
@@ -54,7 +62,7 @@ try:
         frame_count += 1
         if frame_count % 3 == 0:
             try:
-                results = model(frame, device='cpu') #verbose=False
+                results = model(frame, device='cpu')
                 annotated = results[0].plot()
             except Exception as e:
                 print(f"YOLO error: {e}")
