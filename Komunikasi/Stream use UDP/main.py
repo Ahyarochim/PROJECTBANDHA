@@ -9,7 +9,7 @@ Port = 6000
 WIDTH, HEIGHT = 480, 360
 FPS = 15
 JPEG_QUALITY = 50
-MODEL_PATH = r'D:\Azqya Old Code 2\PY and NumPy\30 Day Plylist\Stream Without ffmpeg\best.pt'
+MODEL_PATH = r'best.pt'
 MAX_PACKET_SIZE = 60000  
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
