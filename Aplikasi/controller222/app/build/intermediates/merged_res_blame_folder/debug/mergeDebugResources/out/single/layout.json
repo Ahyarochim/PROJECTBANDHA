@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "com.example.controllerzmq.app-mergeDebugResources-43:/layout/activity_connection.xml",
+        "source": "com.example.controllerzmq.app-main-46:/layout/activity_connection.xml"
+    },
+    {
+        "merged": "com.example.controllerzmq.app-mergeDebugResources-43:/layout/activity_controller.xml",
+        "source": "com.example.controllerzmq.app-main-46:/layout/activity_controller.xml"
+    },
+    {
+        "merged": "com.example.controllerzmq.app-mergeDebugResources-43:/layout/dialog_ip_port.xml",
+        "source": "com.example.controllerzmq.app-main-46:/layout/dialog_ip_port.xml"
+    }
+]

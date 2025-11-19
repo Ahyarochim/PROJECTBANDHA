@@ -4,7 +4,7 @@ from ultralytics import YOLO
 import struct
 import time
 
-IP_HP = "10.107.3.167"
+IP_HP = "10.104.17.134"
 Port = 6000
 WIDTH, HEIGHT = 480, 360
 FPS = 15
