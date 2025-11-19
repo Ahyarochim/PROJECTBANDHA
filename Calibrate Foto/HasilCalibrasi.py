@@ -3,71 +3,84 @@ import numpy as np
 import yaml
 import os
 
+# Nama file kalibrasi
+CALIBRATION_FILE = 'calibration_Matrix.yaml' 
+# ID kamera (0 biasanya adalah webcam default)
+CAMERA_ID = 0 
+
 def load_calibration_data(yaml_file):
-    with open(yaml_file, 'r') as f:
-        data = yaml.safe_load(f)
-    
+    """Memuat matriks kamera (mtx) dan koefisien distorsi (dist) dari file YAML."""
+    try:
+        with open(yaml_file, 'r') as f:
+            data = yaml.safe_load(f)
+        
+        mtx = np.array(data['CameraMatrix'])
+        dist = np.array(data['dist_coeff'])
+        
+        # Mengubah bentuk dist_coeff agar sesuai dengan format OpenCV (1, N)
+        if dist.ndim == 2 and dist.shape[0] == 5:
+            dist = dist.T 
+            
+        print("✅ Parameter kalibrasi dimuat.")
+        return mtx, dist
+        
+    except FileNotFoundError:
+        print(f"❌ ERROR: File '{yaml_file}' tidak ditemukan. Pastikan file ada.")
+        return None, None
+    except Exception as e:
+        print(f"❌ ERROR saat memuat data YAML: {e}")
+        return None, None
 
-    mtx = np.array(data['CameraMatrix'])
-    dist = np.array(data['dist_coeff'])
-    # OpenCV memerlukan dist_coeff dalam bentuk (1, N)
-    if dist.ndim == 2 and dist.shape[0] == 5:
-        dist = dist.T 
+def undistort_live_stream():
+    mtx, dist = load_calibration_data(CALIBRATION_FILE)
 
-    return mtx, dist
-
-def undistort_image(image_path, mtx, dist):
-    # Baca gambar
-    img = cv2.imread(image_path)
-    
-    if img is None:
-        print(f"❌ Error: Tidak dapat memuat gambar dari {image_path}")
+    if mtx is None or dist is None:
         return
 
-    h, w = img.shape[:2]
+    # Inisialisasi kamera
+    cap = cv2.VideoCapture(CAMERA_ID)
+    if not cap.isOpened():
+        print(f"❌ ERROR: Tidak dapat membuka kamera dengan ID {CAMERA_ID}.")
+        return
 
-    # Hitung matriks kamera baru (new camera matrix) dan ROI
-    # alpha=1.0 akan menjaga semua piksel dari gambar asli, bahkan jika itu berarti 
-    # memiliki piksel hitam di sudut-sudut gambar. alpha=0.0 akan memotong gambar 
-    # hanya menyisakan area yang valid.
+    # Dapatkan ukuran frame (perlu untuk perhitungan getOptimalNewCameraMatrix)
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    # Hitung matriks kamera baru dan peta transformasi di awal (efisien!)
+    # alpha=1.0 menjaga semua piksel. alpha=0.0 akan memotong tepi hitam.
     new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
-
-    # Buat peta transformasi (ini lebih cepat daripada cv2.undistort langsung)
     mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, new_mtx, (w, h), 5)
     
-    # Terapkan transformasi (remapping)
-    dst = cv2.remap(img, mapx, mapy, cv2.INTER_LINEAR)
-
-    # Memotong (Crop) area hitam yang mungkin muncul karena alpha=1.0
-    x, y, w, h = roi
-    dst = dst[y:y+h, x:x+w]
-
-    return dst
-
-# --- 3. Eksekusi ---
-if __name__ == '__main__':
-    # Ganti path ini sesuai lokasi file YAML Anda
-    calibration_file = r'D:\Azqya Old Code 2\PY and NumPy\30 Day Plylist\Calibrate Foto\calibration_Matrix.yaml' 
+    print(f"▶️ Mulai streaming dari kamera ({w}x{h}). Tekan 'q' untuk keluar.")
     
-    target_image_path = r'D:\Azqya Old Code 2\PY and NumPy\30 Day Plylist\Calibrate Foto\Data Foto Papan Catur\Azqya3.jpg' 
+    while True:
+        # Baca frame dari kamera
+        ret, frame = cap.read()
+        
+        if not ret:
+            print("❌ Gagal menerima frame dari kamera. Keluar...")
+            break
 
-    try:
-        mtx, dist = load_calibration_data(calibration_file)
-        
-        print(f"✅ Parameter kalibrasi dimuat.")
-        
-        undistorted_img = undistort_image(target_image_path, mtx, dist)
-        
-        if undistorted_img is not None:
-            cv2.imshow("Original Image", cv2.imread(target_image_path))
-            cv2.imshow("Undistorted Image", undistorted_img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            
-            cv2.imwrite("undistorted_result.jpg", undistorted_img)
-            print("✅ Gambar dikoreksi dan disimpan sebagai 'undistorted_result.jpg'.")
+        # --- Terapkan Undistortion ke Frame ---
+        # 1. Terapkan pemetaan transformasi pada frame
+        undistorted_frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
 
-    except FileNotFoundError:
-        print(f"❌ Error: File {calibration_file} tidak ditemukan. Pastikan ia berada di direktori yang sama.")
-    except Exception as e:
-        print(f"❌ Terjadi kesalahan: {e}")
+        # 2. Opsional: Potong area hitam jika ada (berdasarkan ROI)
+        # x, y, w_roi, h_roi = roi
+        # undistorted_frame = undistorted_frame[y:y+h_roi, x:x+w_roi]
+        
+        # Tampilkan frame asli dan yang sudah dikoreksi (undistorted)
+        cv2.imshow('Original Frame (Distorted)', frame)
+        cv2.imshow('Undistorted Frame (Corrected)', undistorted_frame)
+
+        # Keluar jika tombol 'q' ditekan
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # Bersihkan
+    cap.release()
+    cv2.destroyAllWindows()
+
+if __name__ == '__main__':
+    undistort_live_stream()
