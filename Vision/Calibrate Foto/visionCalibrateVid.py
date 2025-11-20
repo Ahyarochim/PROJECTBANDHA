@@ -51,13 +51,12 @@ def undistortVidio():
         frame= cv2.flip(frame,1) 
         undistorted_frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
 
-
-        cv2.imshow('Original Frame', frame)
         cv2.imshow('Undistorted Frame', undistorted_frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-            
+        
+        
     camera.release()
     cv2.destroyAllWindows()
 
