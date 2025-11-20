@@ -41,6 +41,31 @@ yaml_file = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Vision\calibration_Ma
 bufferConf = deque(maxlen=5)
 bufferCenter = deque(maxlen=5)
 
+for box in results.boxes:
+    lebel = model.names[int(box.cls[0])]
+    conf = float(box.conf[0])
+    x1,y1,x2,y2 = box.xyxy[0]
+
+    cx = (x1 + x2) / 2
+    cy = (y1 - y2) / 2
+
+    bufferConf.append(conf)
+    bufferCenter.append((cx,cy))
+
+    if len(bufferConf) < 5 :
+        continue
+    steabelConf = sum(bufferConf) / len(bufferConf)
+    steabelCx = sum([p[0] for p in bufferCenter]) / len(bufferCenter)
+    steabelCy = sum([p[1] for p in bufferCenter]) / len(bufferCenter)
+
+    if lebel == "azqya" and steabelConf > 0.6:
+        detected = True
+        # pos_cm = pixel_to_cm(cx,cy)
+        print("Azqya")
+        pass
+
+detected = False
+
 def loadCalibration(yaml_file):
     try:
         with open(yaml_file, 'r') as f :

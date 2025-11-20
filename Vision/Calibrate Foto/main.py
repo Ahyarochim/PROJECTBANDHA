@@ -3,7 +3,7 @@ import cv2
 import glob
 import yaml
 
-squareSizeCm = 2.7#misal
+squareSizeCm = 2.7
 patternSize = (7,7)
 
 imagePath = r'D:\Azqya Old Code 2\PY and NumPy\30 Day Plylist\Calibrate Foto\Data Foto Papan Catur\\*.jpg'

@@ -4,7 +4,7 @@ from ultralytics import YOLO
 import struct
 import time
 
-IP_HP = "10.104.144.56"
+IP_HP = "10.104.17.134"
 Port = 6000
 WIDTH, HEIGHT = 480, 360
 FPS = 15
@@ -69,9 +69,8 @@ try:
             print(f" Data terlalu besar ({data_size} bytes), turunkan JPEG quality!")
             continue
         
-        header = f"{data_size:08d}".encode('ascii')  # "00012345" as 8 ASCII bytes
-        packet = header + data
-
+        packet = struct.pack("Q", data_size) + data
+        
         try:
             sock.sendto(packet, (IP_HP, Port))
         except socket.error as e:
@@ -83,7 +82,7 @@ try:
         if elapsed < target_delay:
             sleep_time = max(0, target_delay - elapsed)
             time.sleep(sleep_time)
-
+            
 except KeyboardInterrupt:
     print("\n Streaming dihentikan oleh user")
 except Exception as e:
