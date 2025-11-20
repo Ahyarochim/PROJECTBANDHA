@@ -3282,6 +3282,7 @@ id bounce
 id bounceBoth
 id bounceEnd
 id bounceStart
+id btnAuto
 id btnConnect
 id btnRotateLeft
 id btnRotateRight

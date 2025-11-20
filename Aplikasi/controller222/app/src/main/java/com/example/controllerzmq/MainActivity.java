@@ -28,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private UDPReceiver receiver;
     private ImageView videoStream;
 //    private Button button;
-    private Button btnConnect;
+    private Button btnConnect, btnAuto;
     private ImageButton btnSetting, btnRotateRight, btnRotateLeft;
     private TextView koor;
     private String msg;
@@ -79,6 +79,9 @@ public class MainActivity extends AppCompatActivity {
         petunjuk = findViewById(R.id.valJoy);
         btnRotateRight = findViewById(R.id.btnRotateRight);
         btnRotateLeft = findViewById(R.id.btnRotateLeft);
+        btnAuto = findViewById(R.id.btnAuto);
+
+
 
         // connect/disconnect button
         btnConnect.setOnClickListener(v -> {
@@ -101,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
             public void onJoystickMoved(float xPercent, float yPercent, int direction) {
                 // Convert percentage to your coordinate system (0-180)
                 valX = xPercent  * 90; // converts -1 to 1 into 0 to 180
-                valY = yPercent  * 90; // converts -1 to 1 into 0 to 180
+                valY = -yPercent  * 90; // converts -1 to 1 into 0 to 180
 
                 updateCoordinateDisplay();
 

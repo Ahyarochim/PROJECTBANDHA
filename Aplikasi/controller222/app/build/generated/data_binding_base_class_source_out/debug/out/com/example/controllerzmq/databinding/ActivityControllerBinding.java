@@ -27,6 +27,22 @@ public final class ActivityControllerBinding implements ViewBinding {
   @NonNull
   public final BottomNavigationView bottomNavigation;
 
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final Button btnAuto;
+
   @NonNull
   public final Button btnConnect;
 
@@ -55,13 +71,14 @@ public final class ActivityControllerBinding implements ViewBinding {
   public final ImageView videoStream;
 
   private ActivityControllerBinding(@NonNull ConstraintLayout rootView,
-      @NonNull BottomNavigationView bottomNavigation, @NonNull Button btnConnect,
-      @NonNull ImageButton btnRotateLeft, @NonNull ImageButton btnRotateRight,
-      @NonNull ImageButton btnSetting, @NonNull ConstraintLayout controller,
-      @NonNull JoystickView joystick, @NonNull TextView koord, @NonNull TextView valJoy,
-      @NonNull ImageView videoStream) {
+      @NonNull BottomNavigationView bottomNavigation, @Nullable Button btnAuto,
+      @NonNull Button btnConnect, @NonNull ImageButton btnRotateLeft,
+      @NonNull ImageButton btnRotateRight, @NonNull ImageButton btnSetting,
+      @NonNull ConstraintLayout controller, @NonNull JoystickView joystick, @NonNull TextView koord,
+      @NonNull TextView valJoy, @NonNull ImageView videoStream) {
     this.rootView = rootView;
     this.bottomNavigation = bottomNavigation;
+    this.btnAuto = btnAuto;
     this.btnConnect = btnConnect;
     this.btnRotateLeft = btnRotateLeft;
     this.btnRotateRight = btnRotateRight;
@@ -105,6 +122,9 @@ public final class ActivityControllerBinding implements ViewBinding {
       if (bottomNavigation == null) {
         break missingId;
       }
+
+      id = R.id.btnAuto;
+      Button btnAuto = ViewBindings.findChildViewById(rootView, id);
 
       id = R.id.btnConnect;
       Button btnConnect = ViewBindings.findChildViewById(rootView, id);
@@ -156,7 +176,7 @@ public final class ActivityControllerBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation,
+      return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation, btnAuto,
           btnConnect, btnRotateLeft, btnRotateRight, btnSetting, controller, joystick, koord,
           valJoy, videoStream);
     }

@@ -30,6 +30,7 @@ drawable status_ready
 drawable status_sending
 drawable tombol
 id bottom_navigation
+id btnAuto
 id btnConnect
 id btnRotateLeft
 id btnRotateRight

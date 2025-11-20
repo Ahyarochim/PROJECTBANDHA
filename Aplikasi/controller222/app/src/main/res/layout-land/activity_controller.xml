@@ -21,10 +21,10 @@
         android:textColor="@color/black"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.945"
+        app:layout_constraintHorizontal_bias="0.956"
         app:layout_constraintStart_toStartOf="@+id/bottom_navigation"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.3" />
+        app:layout_constraintVertical_bias="0.11" />
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_navigation"
@@ -47,10 +47,11 @@
         android:text="O"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.95"
+        app:layout_constraintHorizontal_bias="0.919"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.112"
+
+        app:layout_constraintTop_toBottomOf="@+id/btnConnect"
+        app:layout_constraintVertical_bias="0.048"
         app:srcCompat="@drawable/ip" />
 
     <TextView
@@ -78,8 +79,9 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.781" />
+
+        app:layout_constraintTop_toBottomOf="@+id/videoStream"
+        app:layout_constraintVertical_bias="0.0" />
 
     <com.example.controllerzmq.JoystickView
         android:id="@+id/joystick"
@@ -88,10 +90,10 @@
         android:layout_centerInParent="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.03"
+        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.696"
+        app:layout_constraintVertical_bias="0.687"
         tools:ignore="MissingConstraints" />
 
     <ImageButton
@@ -124,12 +126,22 @@
         android:layout_height="220dp"
         android:background="#000"
         android:scaleType="centerCrop"
+
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <Button
+        android:id="@+id/btnAuto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AUTO"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.498"
+        app:layout_constraintHorizontal_bias="0.947"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.033" />
+        app:layout_constraintTop_toBottomOf="@+id/btnSetting"
+        app:layout_constraintVertical_bias="0.12" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

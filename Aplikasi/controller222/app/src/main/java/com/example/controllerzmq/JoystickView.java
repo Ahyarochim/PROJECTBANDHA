@@ -83,7 +83,7 @@ public class JoystickView extends View {
                 }
 
                 float xPercent = (handleX - centerX) / baseRadius;
-                float yPercent = (handleY - centerY) / baseRadius;
+                float yPercent = -(handleY - centerY) / baseRadius;
                 int direction = getDirection(xPercent, yPercent);
 
                 if (listener != null) {
