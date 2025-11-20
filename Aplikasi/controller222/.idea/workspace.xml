@@ -123,7 +123,9 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add ." />
+    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add .">
+      <change beforePath="$PROJECT_DIR$/../../Komunikasi/Stream use UDP/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/../../Komunikasi/Stream use UDP/main.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -132,7 +134,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[DeviceId(pluginId=PhysicalDevice, isTemplate=false, identifier=serial=RRCY308HE0D)]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[DeviceId(pluginId=PhysicalDevice, isTemplate=false, identifier=serial=10DE7J00RP000CY)]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
