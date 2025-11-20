@@ -4,7 +4,7 @@ from ultralytics import YOLO
 import struct
 import time
 
-IP_HP = "10.104.17.134"
+IP_HP = "10.104.144.56"
 Port = 6000
 WIDTH, HEIGHT = 480, 360
 FPS = 15
@@ -69,8 +69,9 @@ try:
             print(f" Data terlalu besar ({data_size} bytes), turunkan JPEG quality!")
             continue
         
-        packet = struct.pack("Q", data_size) + data
-        
+        header = f"{data_size:08d}".encode('ascii')  # "00012345" as 8 ASCII bytes
+        packet = header + data
+
         try:
             sock.sendto(packet, (IP_HP, Port))
         except socket.error as e:
