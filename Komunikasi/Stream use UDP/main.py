@@ -5,15 +5,14 @@ import os
 import numpy as np
 import yaml
 from collections import deque
-import struct
 import time
 
 
 #FILE
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
-yml_File= r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\calibration_Matrix.yaml'
+model_path = r'best.pt'
+yml_File = r'calibration_Matrix.yaml'
 
-IP_HP = "10.104.17.134"
+IP_HP = "10.104.223.162"
 Port = 6000
 WIDTH, HEIGHT = 480, 360
 FPS = 15
@@ -25,6 +24,10 @@ model = YOLO(model_path)
 # GARIS INDIKATOR
 margin = 100
 bufferConf = deque(maxlen=5)
+
+# ===== KONSTANTA UNTUK DISTANCE CALCULATION =====
+# PENTING: Ukur lebar wajah Azqya secara fisik (telinga ke telinga atau pipi ke pipi)
+REAL_FACE_WIDTH_CM = 20.0  # Ganti dengan ukuran sebenarnya dalam cm!
 
 # LOAD KALIBRASI
 def loadCalibration(path):
@@ -42,6 +45,28 @@ def loadCalibration(path):
     except:
         print("Kalibrasi gagal")
         return None, None
+
+
+# HITUNG JARAK
+def calculateDistance(bbox_width_pixels, focal_length_x, real_width_cm):
+    """
+    Menghitung jarak objek dari kamera menggunakan pinhole camera model
+    
+    Distance = (Real_Width × Focal_Length) / Pixel_Width
+    
+    Args:
+        bbox_width_pixels: Lebar bounding box dalam piksel
+        focal_length_x: Focal length kamera dari matrix kalibrasi (fx)
+        real_width_cm: Lebar objek sebenarnya dalam cm
+    
+    Returns:
+        Jarak dalam cm
+    """
+    if bbox_width_pixels == 0:
+        return None
+    
+    distance_cm = (real_width_cm * focal_length_x) / bbox_width_pixels
+    return distance_cm
 
 
 # SOCKET
@@ -70,6 +95,11 @@ def UndistortFrame():
     if mtx is None or dist is None:
         return
     
+    # Ambil focal length dari camera matrix
+    focal_length_x = mtx[0, 0]  # fx
+    focal_length_y = mtx[1, 1]  # fy
+    print(f"Focal Length: fx={focal_length_x:.2f}, fy={focal_length_y:.2f}")
+    
     w = int(Camera.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(Camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
     new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
@@ -82,7 +112,6 @@ def UndistortFrame():
                 continue
 
             # YOLO DETECT
-
             undistorted_frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
             results = model(undistorted_frame, device='cpu')
             boxes = results[0].boxes
@@ -91,8 +120,9 @@ def UndistortFrame():
             detected = False
             obj_cx = None
             obj_cy = None
+            distance_cm = None
 
-            # CEK OBJEK & HITUNG POSISI
+            # CEK OBJEK & HITUNG POSISI + JARAK
             if len(boxes) > 0:
                 box = boxes[0]
                 x1, y1, x2, y2 = box.xyxy[0]
@@ -101,6 +131,10 @@ def UndistortFrame():
 
                 cx = int((x1 + x2) / 2)
                 cy = int((y1 + y2) / 2)
+                
+                # Hitung lebar bounding box
+                bbox_width = int(x2 - x1)
+                bbox_height = int(y2 - y1)
 
                 bufferConf.append(conf)
 
@@ -110,6 +144,18 @@ def UndistortFrame():
                     if stable_conf > 0.6:
                         detected = True
                         obj_cx, obj_cy = cx, cy
+                        
+                        # HITUNG JARAK!
+                        distance_cm = calculateDistance(
+                            bbox_width, 
+                            focal_length_x, 
+                            REAL_FACE_WIDTH_CM
+                        )
+                        
+                        # Print ke terminal
+                        print(f"[{label}] Confidence: {stable_conf:.2f} | "
+                              f"BBox: {bbox_width}x{bbox_height}px | "
+                              f"Distance: {distance_cm:.1f} cm ({distance_cm/100:.2f} m)")
            
             # BUAT ANNOTATED FRAME
             annotated = results[0].plot()
@@ -138,7 +184,19 @@ def UndistortFrame():
 
             if detected:                                                      ### >> Titik tengah objek
                 cv2.circle(annotated, (obj_cx, obj_cy), 6, (255,255,0), -1)
-
+                
+                # Tampilkan jarak di frame
+                if distance_cm:
+                    distance_text = f"{distance_cm:.1f} cm"
+                    cv2.putText(
+                        annotated, 
+                        distance_text,
+                        (obj_cx - 50, obj_cy - 20),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 255),  # Kuning
+                        2
+                    )
 
             # Kirim ke Android via UDP
             ok, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
@@ -149,7 +207,9 @@ def UndistortFrame():
             data_size = len(data)
 
             if data_size <= MAX_PACKET_SIZE:
-                packet = struct.pack("Q", data_size) + data
+                # Format header as 8-character ASCII string (e.g., "00016640")
+                header = f"{data_size:08d}".encode('ascii')
+                packet = header + data
                 sock.sendto(packet, (IP_HP, Port))
 
 
