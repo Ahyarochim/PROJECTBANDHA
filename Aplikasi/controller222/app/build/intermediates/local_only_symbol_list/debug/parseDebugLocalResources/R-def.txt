@@ -48,7 +48,9 @@ id koord
 id modeStatusText
 id modeSwitch
 id scrollContent
-id statusText
+id tvGripper1Value
+id tvGripper2Value
+id tvGripper3Value
 id tvStatus
 id valJoy
 id videoStream

@@ -157,7 +157,39 @@ public final class ActivityControllerBinding implements ViewBinding {
    * </ul>
    */
   @Nullable
-  public final TextView statusText;
+  public final TextView tvGripper1Value;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final TextView tvGripper2Value;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final TextView tvGripper3Value;
 
   @NonNull
   public final TextView valJoy;
@@ -171,8 +203,9 @@ public final class ActivityControllerBinding implements ViewBinding {
       @NonNull ImageButton btnSetting, @NonNull ConstraintLayout controller,
       @Nullable Slider gripper, @Nullable Slider gripper2, @Nullable Slider gripper3,
       @NonNull JoystickView joystick, @NonNull TextView koord, @Nullable TextView modeStatusText,
-      @Nullable SwitchMaterial modeSwitch, @Nullable TextView statusText, @NonNull TextView valJoy,
-      @NonNull ImageView videoStream) {
+      @Nullable SwitchMaterial modeSwitch, @Nullable TextView tvGripper1Value,
+      @Nullable TextView tvGripper2Value, @Nullable TextView tvGripper3Value,
+      @NonNull TextView valJoy, @NonNull ImageView videoStream) {
     this.rootView = rootView;
     this.bottomNavigation = bottomNavigation;
     this.btnConnect = btnConnect;
@@ -187,7 +220,9 @@ public final class ActivityControllerBinding implements ViewBinding {
     this.koord = koord;
     this.modeStatusText = modeStatusText;
     this.modeSwitch = modeSwitch;
-    this.statusText = statusText;
+    this.tvGripper1Value = tvGripper1Value;
+    this.tvGripper2Value = tvGripper2Value;
+    this.tvGripper3Value = tvGripper3Value;
     this.valJoy = valJoy;
     this.videoStream = videoStream;
   }
@@ -275,8 +310,14 @@ public final class ActivityControllerBinding implements ViewBinding {
       id = R.id.modeSwitch;
       SwitchMaterial modeSwitch = ViewBindings.findChildViewById(rootView, id);
 
-      id = R.id.statusText;
-      TextView statusText = ViewBindings.findChildViewById(rootView, id);
+      id = R.id.tvGripper1Value;
+      TextView tvGripper1Value = ViewBindings.findChildViewById(rootView, id);
+
+      id = R.id.tvGripper2Value;
+      TextView tvGripper2Value = ViewBindings.findChildViewById(rootView, id);
+
+      id = R.id.tvGripper3Value;
+      TextView tvGripper3Value = ViewBindings.findChildViewById(rootView, id);
 
       id = R.id.valJoy;
       TextView valJoy = ViewBindings.findChildViewById(rootView, id);
@@ -292,7 +333,8 @@ public final class ActivityControllerBinding implements ViewBinding {
 
       return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation,
           btnConnect, btnRotateLeft, btnRotateRight, btnSetting, controller, gripper, gripper2,
-          gripper3, joystick, koord, modeStatusText, modeSwitch, statusText, valJoy, videoStream);
+          gripper3, joystick, koord, modeStatusText, modeSwitch, tvGripper1Value, tvGripper2Value,
+          tvGripper3Value, valJoy, videoStream);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

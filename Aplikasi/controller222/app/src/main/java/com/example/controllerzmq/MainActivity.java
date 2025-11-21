@@ -12,6 +12,7 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ImageView;
+import com.google.android.material.slider.Slider;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -31,14 +32,15 @@ public class MainActivity extends AppCompatActivity {
     private ImageView videoStream;
     private Button btnConnect;
     private ImageButton btnSetting, btnRotateRight, btnRotateLeft;
-    private TextView koor;
+    private TextView koor, tvGripper1Value, tvGripper2Value, tvGripper3Value;
     private String msg;
     private JoystickView joystick;
     private TextView petunjuk;
     private SwitchMaterial modeSwitch;
     private TextView modeStatusText;
+    private Slider gripper1, gripper2, gripper3;
 
-    private float valX = 0f, valY = 0f, valRotation = 0f;
+    private float valX = 0f, valY = 0f, valRotation = 0f, valA = 0f, valB = 0f, valC = 0f;
 
     private Handler handler = new Handler(Looper.getMainLooper());
 
@@ -69,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
 
         setupSystemInsets();
 
+
         prefs = getSharedPreferences("ZMQ_PREFS", MODE_PRIVATE);
         serverIp = prefs.getString("IP", serverIp);
         serverPort = prefs.getInt("PORT", serverPort);
@@ -83,6 +86,16 @@ public class MainActivity extends AppCompatActivity {
         btnRotateLeft = findViewById(R.id.btnRotateLeft);
         modeSwitch = findViewById(R.id.modeSwitch);
         modeStatusText = findViewById(R.id.modeStatusText);
+
+        gripper1 = findViewById(R.id.gripper);
+        gripper2 = findViewById(R.id.gripper2);
+        gripper3 = findViewById(R.id.gripper3);
+
+        tvGripper1Value = findViewById(R.id.tvGripper1Value);
+        tvGripper2Value = findViewById(R.id.tvGripper2Value);
+        tvGripper3Value = findViewById(R.id.tvGripper3Value);
+
+        setupSliderListeners();
 
         // Setup mode switch listener
         modeSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -135,12 +148,82 @@ public class MainActivity extends AppCompatActivity {
         updateModeDisplay();
     }
 
+    private void setupSliderListeners() {
+        // Gripper 1 listener
+        gripper1.addOnChangeListener((slider, value, fromUser) -> {
+            valA = value;
+            tvGripper1Value.setText(String.format("Gripper 1: %.2f", valA));
+
+            // Send slider data if connected and in manual mode
+            if (isConnected && isManualMode) {
+                sendSliderData();
+            }
+        });
+
+        // Gripper 2 listener
+        gripper2.addOnChangeListener((slider, value, fromUser) -> {
+            valB = value;
+            tvGripper2Value.setText(String.format("Gripper 2: %.2f", valB));
+
+            if (isConnected && isManualMode) {
+                sendSliderData();
+            }
+        });
+
+        // Gripper 3 listener
+        gripper3.addOnChangeListener((slider, value, fromUser) -> {
+            valC = value;
+            tvGripper3Value.setText(String.format("Gripper 3: %.2f", valC));
+
+            if (isConnected && isManualMode) {
+                sendSliderData();
+            }
+        });
+    }
+
+    private void sendSliderData() {
+        if (socket != null && isConnected && isManualMode) {
+            // Format: abc,value1,value2,value3
+            String msg = String.format("abc,%.2f,%.2f,%.2f", valA, valB, valC);
+            socket.send(msg.getBytes(ZMQ.CHARSET));
+            Log.d("ZMQ", "Sent slider data: " + msg);
+        }
+    }
+
+    private void resetSliders() {
+        valA = 0f;
+        valB = 0f;
+        valC = 0f;
+
+        gripper1.setValue(0f);
+        gripper2.setValue(0f);
+        gripper3.setValue(0f);
+
+        tvGripper1Value.setText("Gripper 1: 0.00");
+        tvGripper2Value.setText("Gripper 2: 0.00");
+        tvGripper3Value.setText("Gripper 3: 0.00");
+
+        if (isConnected && isManualMode) {
+            sendSliderData();
+        }
+    }
+
+
+
     private void updateModeDisplay() {
         if (isManualMode) {
             modeStatusText.setText("Mode: MANUAL");
             modeStatusText.setBackgroundColor(getResources().getColor(android.R.color.holo_blue_light));
             modeStatusText.setTextColor(getResources().getColor(android.R.color.holo_blue_dark));
             modeSwitch.setText("Manual");
+
+            // Enable sliders in manual mode
+            gripper1.setEnabled(true);
+            gripper2.setEnabled(true);
+            gripper3.setEnabled(true);
+            gripper1.setAlpha(1.0f);
+            gripper2.setAlpha(1.0f);
+            gripper3.setAlpha(1.0f);
 
             // Enable joystick in manual mode
             joystick.setEnabled(true);
@@ -150,6 +233,14 @@ public class MainActivity extends AppCompatActivity {
             modeStatusText.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
             modeStatusText.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
             modeSwitch.setText("Autonomous");
+
+            // Disable sliders in autonomous mode
+            gripper1.setEnabled(false);
+            gripper2.setEnabled(false);
+            gripper3.setEnabled(false);
+            gripper1.setAlpha(0.5f);
+            gripper2.setAlpha(0.5f);
+            gripper3.setAlpha(0.5f);
 
             // Disable joystick in autonomous mode (optional visual feedback)
             joystick.setEnabled(false);
@@ -287,6 +378,7 @@ public class MainActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 resetCoordinates();
+                resetSliders();
 
                 // Close joystick socket
                 if (socket != null) {
@@ -312,11 +404,13 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         disconnectFromServer();
         resetCoordinates();
+        resetSliders();
         if (receiver != null) receiver.stopReceiver();
     }
 }

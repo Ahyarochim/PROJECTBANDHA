@@ -3633,7 +3633,6 @@ id startToEnd
 id startVertical
 id staticLayout
 id staticPostLayout
-id statusText
 id stop
 id stretch
 id submenuarrow
@@ -3688,6 +3687,9 @@ id transition_position
 id transition_scene_layoutid_cache
 id transition_transform
 id triangle
+id tvGripper1Value
+id tvGripper2Value
+id tvGripper3Value
 id tvStatus
 id unchecked
 id uniform

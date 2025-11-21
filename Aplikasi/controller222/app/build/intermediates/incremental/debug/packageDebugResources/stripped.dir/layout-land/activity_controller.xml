@@ -21,18 +21,20 @@
     <!-- Rotate Left Button -->
 
     <!-- Rotate Right Button -->
+
+    <!-- Connect Button -->
     <ImageButton
         android:id="@+id/btnRotateLeft"
         android:layout_width="70dp"
         android:layout_height="70dp"
         android:layout_marginTop="40dp"
         android:contentDescription="Rotate Left"
-        app:layout_constraintBottom_toBottomOf="@+id/bottom_navigation"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.024"
+        app:layout_constraintBottom_toTopOf="@+id/joystick"
+        app:layout_constraintEnd_toStartOf="@+id/btnRotateRight"
+        app:layout_constraintHorizontal_bias="0.275"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.117"
+        app:layout_constraintVertical_bias="0.114"
         app:srcCompat="@drawable/rotateleft" />
 
     <ImageButton
@@ -40,15 +42,14 @@
         android:layout_width="70dp"
         android:layout_height="70dp"
         android:contentDescription="Rotate Right"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.169"
+        app:layout_constraintBottom_toTopOf="@+id/joystick"
+        app:layout_constraintEnd_toStartOf="@+id/videoStream"
+        app:layout_constraintHorizontal_bias="0.821"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.117"
+        app:layout_constraintVertical_bias="0.586"
         app:srcCompat="@drawable/rotateright" />
 
-    <!-- Connect Button -->
     <Button
         android:id="@+id/btnConnect"
         android:layout_width="wrap_content"
@@ -77,6 +78,11 @@
         app:thumbTint="#AA5EE0"
         app:trackTint="#E0E0E0" />
 
+
+    <!-- Joystick Info Text -->
+
+    <!-- Joystick -->
+
     <TextView
         android:id="@+id/modeStatusText"
         android:layout_width="wrap_content"
@@ -89,29 +95,16 @@
         android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/videoStream"
-        app:layout_constraintVertical_bias="0.02" />
+        app:layout_constraintVertical_bias="0.076" />
 
-    <!-- Connection Status -->
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Status: Connecting..."
-        android:textColor="#FF9800"
-        android:textSize="12sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/modeStatusText" />
-
-    <!-- Joystick Info Text -->
     <TextView
         android:id="@+id/valJoy"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
+        android:layout_marginBottom="72dp"
         android:text="Gerakkan Joystick!"
         android:textColor="@color/black"
         android:textSize="24sp"
@@ -119,10 +112,10 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/statusText"
+        app:layout_constraintTop_toBottomOf="@+id/modeStatusText" />
+<!--        app:layout_constraintTop_toBottomOf="@+id/statusText"-->
         app:layout_constraintVertical_bias="0.05" />
 
-    <!-- Joystick -->
     <com.example.controllerzmq.JoystickView
         android:id="@+id/joystick"
         android:layout_width="200dp"
@@ -179,6 +172,8 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
+        android:valueFrom="0"
+        android:valueTo="1"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.578" />
@@ -187,6 +182,21 @@
         android:id="@+id/gripper2"
         android:layout_width="200dp"
         android:layout_height="wrap_content"
+        android:valueFrom="0"
+        android:valueTo="1"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.713" />
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/gripper3"
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:valueFrom="0"
+        android:valueTo="1"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
@@ -194,15 +204,47 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.845" />
 
-    <com.google.android.material.slider.Slider
-        android:id="@+id/gripper3"
-        android:layout_width="200dp"
+    <TextView
+        android:id="@+id/tvGripper1Value"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.71" />
+        android:text="Gripper 1: 0.00"
+        android:textColor="@color/black"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/gripper"
+        app:layout_constraintEnd_toEndOf="@+id/gripper"
+        app:layout_constraintStart_toStartOf="@+id/gripper"
+        app:layout_constraintTop_toBottomOf="@+id/modeSwitch"
+        app:layout_constraintVertical_bias="1.0" />
+
+    <!-- Tambahkan setelah slider gripper2 -->
+    <TextView
+        android:id="@+id/tvGripper2Value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Gripper 2: 0.00"
+        android:textColor="@color/black"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/gripper2"
+        app:layout_constraintEnd_toEndOf="@+id/gripper2"
+        app:layout_constraintStart_toStartOf="@+id/gripper2"
+        app:layout_constraintVertical_bias="1.0" />
+
+    <!-- Tambahkan setelah slider gripper3 -->
+    <TextView
+        android:id="@+id/tvGripper3Value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Gripper 3: 0.00"
+        android:textColor="@color/black"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/gripper3"
+        app:layout_constraintEnd_toEndOf="@+id/gripper3"
+        app:layout_constraintStart_toStartOf="@+id/gripper3"
+        app:layout_constraintTop_toBottomOf="@+id/gripper"
+        app:layout_constraintVertical_bias="1.0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
