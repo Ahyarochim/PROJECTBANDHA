@@ -6,12 +6,19 @@ import numpy as np
 import yaml
 from collections import deque
 import time
+import serial
+import sys
 
 
 #FILE
 model_path = r'best.pt'
 yml_File = r'calibration_Matrix.yaml'
 
+# SERIAL CONFIG (STM32)
+SERIAL_PORT = "/dev/ttyACM0"  # Ubah sesuai port STM32 di Linux (biasanya /dev/ttyUSB0 atau /dev/ttyACM0)
+BAUDRATE = 115200
+
+# UDP CONFIG
 IP_HP = "10.104.223.162"
 Port = 6000
 WIDTH, HEIGHT = 480, 360
@@ -69,6 +76,20 @@ def calculateDistance(bbox_width_pixels, focal_length_x, real_width_cm):
     return distance_cm
 
 
+# INIT SERIAL
+def init_serial():
+    """Inisialisasi koneksi serial ke STM32."""
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=0.1)
+        time.sleep(2)  # Tunggu STM32 siap
+        print(f"[OK] Connected to STM32 at {SERIAL_PORT} ({BAUDRATE} baud)")
+        return ser
+    except Exception as e:
+        print(f"[ERROR] Cannot open serial port: {e}")
+        print("[INFO] Program will continue without serial communication")
+        return None
+
+
 # SOCKET
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
@@ -91,8 +112,13 @@ target_delay = 1.0 / FPS
 
 # MAIN LOOP
 def UndistortFrame():
+    # Inisialisasi serial
+    ser = init_serial()
+    
     mtx, dist = loadCalibration(yml_File)
     if mtx is None or dist is None:
+        if ser and ser.is_open:
+            ser.close()
         return
     
     # Ambil focal length dari camera matrix
@@ -104,6 +130,9 @@ def UndistortFrame():
     h = int(Camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
     new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
     mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, new_mtx, (w, h), 5)
+    
+    # Flag untuk tracking pengiriman data
+    data_sent = False
     
     try:
         while True:
@@ -156,6 +185,33 @@ def UndistortFrame():
                         print(f"[{label}] Confidence: {stable_conf:.2f} | "
                               f"BBox: {bbox_width}x{bbox_height}px | "
                               f"Distance: {distance_cm:.1f} cm ({distance_cm/100:.2f} m)")
+                        
+                        # KIRIM KE STM32 jika jarak = 50cm (±2cm toleransi) - HANYA SEKALI
+                        if distance_cm is not None and abs(distance_cm - 50.0) < 2.0:
+                            if not data_sent:  # Kirim hanya jika belum pernah kirim
+                                adjusted_distance = distance_cm - 5  # 50cm - 5 = 45cm
+                                if ser and ser.is_open:
+                                    try:
+                                        # Format: "45.0\n" (sesuai format yang diharapkan STM32)
+                                        data_to_send = f"{adjusted_distance:.1f}\n"
+                                        ser.write(data_to_send.encode())
+                                        
+                                        # Print dengan jelas di terminal
+                                        print("\n" + "="*70)
+                                        print("✅ DATA BERHASIL DIKIRIM KE STM32!")
+                                        print(f"   📤 Data: {data_to_send.strip()} cm")
+                                        print(f"   🤖 Robot akan maju: {adjusted_distance:.1f} cm")
+                                        print("="*70 + "\n")
+                                        
+                                        data_sent = True  # Set flag supaya tidak kirim lagi
+                                    except Exception as e:
+                                        print(f"\n❌ [ERROR] Gagal kirim ke STM32: {e}\n")
+                        else:
+                            # Reset flag jika jarak jauh dari 50cm (lebih dari 10cm)
+                            if distance_cm is not None and abs(distance_cm - 50.0) > 10.0:
+                                if data_sent:
+                                    print("\n⚠️  [INFO] Jarak berubah jauh - Siap kirim data lagi\n")
+                                    data_sent = False
            
             # BUAT ANNOTATED FRAME
             annotated = results[0].plot()
@@ -216,6 +272,9 @@ def UndistortFrame():
     finally:
         Camera.release()
         sock.close()
+        if ser and ser.is_open:
+            ser.close()
+            print("[OK] Serial port closed")
 
 
 
