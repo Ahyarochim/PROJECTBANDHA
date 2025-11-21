@@ -3282,7 +3282,6 @@ id bounce
 id bounceBoth
 id bounceEnd
 id bounceStart
-id btnAuto
 id btnConnect
 id btnRotateLeft
 id btnRotateRight
@@ -3400,6 +3399,9 @@ id ghost_view_holder
 id gone
 id graph
 id graph_wrap
+id gripper
+id gripper2
+id gripper3
 id group_divider
 id grouping
 id groups
@@ -3470,6 +3472,8 @@ id matrix
 id message
 id middle
 id mini
+id modeStatusText
+id modeSwitch
 id month_grid
 id month_navigation_bar
 id month_navigation_fragment_toggle
@@ -3629,6 +3633,7 @@ id startToEnd
 id startVertical
 id staticLayout
 id staticPostLayout
+id statusText
 id stop
 id stretch
 id submenuarrow

@@ -16,6 +16,8 @@ import androidx.viewbinding.ViewBindings;
 import com.example.controllerzmq.JoystickView;
 import com.example.controllerzmq.R;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.slider.Slider;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import java.lang.NullPointerException;
 import java.lang.Override;
 import java.lang.String;
@@ -24,24 +26,21 @@ public final class ActivityControllerBinding implements ViewBinding {
   @NonNull
   private final ConstraintLayout rootView;
 
-  @NonNull
-  public final BottomNavigationView bottomNavigation;
-
   /**
    * This binding is not available in all configurations.
    * <p>
    * Present:
    * <ul>
-   *   <li>layout-land/</li>
+   *   <li>layout/</li>
    * </ul>
    *
    * Absent:
    * <ul>
-   *   <li>layout/</li>
+   *   <li>layout-land/</li>
    * </ul>
    */
   @Nullable
-  public final Button btnAuto;
+  public final BottomNavigationView bottomNavigation;
 
   @NonNull
   public final Button btnConnect;
@@ -58,11 +57,107 @@ public final class ActivityControllerBinding implements ViewBinding {
   @NonNull
   public final ConstraintLayout controller;
 
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final Slider gripper;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final Slider gripper2;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final Slider gripper3;
+
   @NonNull
   public final JoystickView joystick;
 
   @NonNull
   public final TextView koord;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final TextView modeStatusText;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final SwitchMaterial modeSwitch;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final TextView statusText;
 
   @NonNull
   public final TextView valJoy;
@@ -71,21 +166,28 @@ public final class ActivityControllerBinding implements ViewBinding {
   public final ImageView videoStream;
 
   private ActivityControllerBinding(@NonNull ConstraintLayout rootView,
-      @NonNull BottomNavigationView bottomNavigation, @Nullable Button btnAuto,
-      @NonNull Button btnConnect, @NonNull ImageButton btnRotateLeft,
-      @NonNull ImageButton btnRotateRight, @NonNull ImageButton btnSetting,
-      @NonNull ConstraintLayout controller, @NonNull JoystickView joystick, @NonNull TextView koord,
-      @NonNull TextView valJoy, @NonNull ImageView videoStream) {
+      @Nullable BottomNavigationView bottomNavigation, @NonNull Button btnConnect,
+      @NonNull ImageButton btnRotateLeft, @NonNull ImageButton btnRotateRight,
+      @NonNull ImageButton btnSetting, @NonNull ConstraintLayout controller,
+      @Nullable Slider gripper, @Nullable Slider gripper2, @Nullable Slider gripper3,
+      @NonNull JoystickView joystick, @NonNull TextView koord, @Nullable TextView modeStatusText,
+      @Nullable SwitchMaterial modeSwitch, @Nullable TextView statusText, @NonNull TextView valJoy,
+      @NonNull ImageView videoStream) {
     this.rootView = rootView;
     this.bottomNavigation = bottomNavigation;
-    this.btnAuto = btnAuto;
     this.btnConnect = btnConnect;
     this.btnRotateLeft = btnRotateLeft;
     this.btnRotateRight = btnRotateRight;
     this.btnSetting = btnSetting;
     this.controller = controller;
+    this.gripper = gripper;
+    this.gripper2 = gripper2;
+    this.gripper3 = gripper3;
     this.joystick = joystick;
     this.koord = koord;
+    this.modeStatusText = modeStatusText;
+    this.modeSwitch = modeSwitch;
+    this.statusText = statusText;
     this.valJoy = valJoy;
     this.videoStream = videoStream;
   }
@@ -119,12 +221,6 @@ public final class ActivityControllerBinding implements ViewBinding {
     missingId: {
       id = R.id.bottom_navigation;
       BottomNavigationView bottomNavigation = ViewBindings.findChildViewById(rootView, id);
-      if (bottomNavigation == null) {
-        break missingId;
-      }
-
-      id = R.id.btnAuto;
-      Button btnAuto = ViewBindings.findChildViewById(rootView, id);
 
       id = R.id.btnConnect;
       Button btnConnect = ViewBindings.findChildViewById(rootView, id);
@@ -152,6 +248,15 @@ public final class ActivityControllerBinding implements ViewBinding {
 
       ConstraintLayout controller = (ConstraintLayout) rootView;
 
+      id = R.id.gripper;
+      Slider gripper = ViewBindings.findChildViewById(rootView, id);
+
+      id = R.id.gripper2;
+      Slider gripper2 = ViewBindings.findChildViewById(rootView, id);
+
+      id = R.id.gripper3;
+      Slider gripper3 = ViewBindings.findChildViewById(rootView, id);
+
       id = R.id.joystick;
       JoystickView joystick = ViewBindings.findChildViewById(rootView, id);
       if (joystick == null) {
@@ -163,6 +268,15 @@ public final class ActivityControllerBinding implements ViewBinding {
       if (koord == null) {
         break missingId;
       }
+
+      id = R.id.modeStatusText;
+      TextView modeStatusText = ViewBindings.findChildViewById(rootView, id);
+
+      id = R.id.modeSwitch;
+      SwitchMaterial modeSwitch = ViewBindings.findChildViewById(rootView, id);
+
+      id = R.id.statusText;
+      TextView statusText = ViewBindings.findChildViewById(rootView, id);
 
       id = R.id.valJoy;
       TextView valJoy = ViewBindings.findChildViewById(rootView, id);
@@ -176,9 +290,9 @@ public final class ActivityControllerBinding implements ViewBinding {
         break missingId;
       }
 
-      return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation, btnAuto,
-          btnConnect, btnRotateLeft, btnRotateRight, btnSetting, controller, joystick, koord,
-          valJoy, videoStream);
+      return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation,
+          btnConnect, btnRotateLeft, btnRotateRight, btnSetting, controller, gripper, gripper2,
+          gripper3, joystick, koord, modeStatusText, modeSwitch, statusText, valJoy, videoStream);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

@@ -30,7 +30,6 @@ drawable status_ready
 drawable status_sending
 drawable tombol
 id bottom_navigation
-id btnAuto
 id btnConnect
 id btnRotateLeft
 id btnRotateRight
@@ -41,9 +40,15 @@ id controller
 id etIpAddress
 id etMessage
 id etPort
+id gripper
+id gripper2
+id gripper3
 id joystick
 id koord
+id modeStatusText
+id modeSwitch
 id scrollContent
+id statusText
 id tvStatus
 id valJoy
 id videoStream

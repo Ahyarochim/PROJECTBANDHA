@@ -3281,7 +3281,6 @@ int id bounce 0x7f080063
 int id bounceBoth 0x7f080064
 int id bounceEnd 0x7f080065
 int id bounceStart 0x7f080066
-int id btnAuto 0x7f080067
 int id btnConnect 0x7f080068
 int id btnRotateLeft 0x7f080069
 int id btnRotateRight 0x7f08006a
@@ -3399,6 +3398,9 @@ int id ghost_view_holder 0x7f0800d9
 int id gone 0x7f0800da
 int id graph 0x7f0800db
 int id graph_wrap 0x7f0800dc
+int id gripper 0x7f080213
+int id gripper2 0x7f080214
+int id gripper3 0x7f080218
 int id group_divider 0x7f0800dd
 int id grouping 0x7f0800de
 int id groups 0x7f0800df
@@ -3469,6 +3471,8 @@ int id matrix 0x7f08011f
 int id message 0x7f080120
 int id middle 0x7f080121
 int id mini 0x7f080122
+int id modeStatusText 0x7f080215
+int id modeSwitch 0x7f080216
 int id month_grid 0x7f080123
 int id month_navigation_bar 0x7f080124
 int id month_navigation_fragment_toggle 0x7f080125
@@ -3628,6 +3632,7 @@ int id startToEnd 0x7f0801be
 int id startVertical 0x7f0801bf
 int id staticLayout 0x7f0801c0
 int id staticPostLayout 0x7f0801c1
+int id statusText 0x7f080217
 int id stop 0x7f0801c2
 int id stretch 0x7f0801c3
 int id submenuarrow 0x7f0801c4

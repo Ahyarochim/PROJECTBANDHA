@@ -1,5 +1,9 @@
 [
     {
+        "merged": "C:\\Users\\annonimous\\.gradle\\daemon\\8.13\\com.example.controllerzmq.app-mergeDebugResources-43:\\layout-land\\activity_controller.xml",
+        "source": "C:\\Users\\annonimous\\.gradle\\daemon\\8.13\\com.example.controllerzmq.app-main-46:\\layout-land\\activity_controller.xml"
+    },
+    {
         "merged": "com.example.controllerzmq.app-mergeDebugResources-43:/layout-land/activity_controller.xml",
         "source": "com.example.controllerzmq.app-main-46:/layout-land/activity_controller.xml"
     }
