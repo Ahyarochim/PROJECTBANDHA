@@ -11,8 +11,8 @@ import sys
 
 
 #FILE
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\calibration_Matrix.yamll'
+model_path = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Komunikasi\Stream use UDP\best.pt'
+yml_File = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Komunikasi\Stream use UDP\Calibration_Matrix copy.yaml'
 
 # SERIAL CONFIG (STM32)
 SERIAL_PORT = "/dev/ttyACM0"  # Ubah sesuai port STM32 di Linux (biasanya /dev/ttyUSB0 atau /dev/ttyACM0)
