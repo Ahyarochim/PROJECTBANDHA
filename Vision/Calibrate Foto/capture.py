@@ -89,7 +89,7 @@ def UndistortVidio():
         if cv2.getWindowProperty(windowName,cv2.WND_PROP_VISIBLE) <1 :
             break
         if auto_capture:
-            Capture(frame)
+            Capture(UndistortVidioFrame)
 
         if key == ord('c'):
             auto_capture = True
@@ -102,61 +102,3 @@ UndistortVidio()
 camera.release()
 cv2.destroyAllWindows()
 
-
-
-# INI DI KOMUNIKASI NYAA
-from collections import deque
-
-buffer_conf = deque(maxlen=5)
-buffer_center = deque(maxlen=5)
-
-for box in results.boxes:
-    label = model.names[int(box.cls[0])]
-    conf = float(box.conf[0])
-    x1, y1, x2, y2 = box.xyxy[0]
-    
-    # ambil center
-    cx = (x1 + x2) / 2
-    cy = (y1 + y2) / 2
-
-    # masukin ke buffer
-    buffer_conf.append(conf)
-    buffer_center.append((cx, cy))
-
-    # kalau buffer belum penuh → skip
-    if len(buffer_conf) < 5:
-        continue
-
-    # bikin nilai stabil
-    stable_conf = sum(buffer_conf) / len(buffer_conf)
-    stable_cx = sum([p[0] for p in buffer_center]) / len(buffer_center)
-    stable_cy = sum([p[1] for p in buffer_center]) / len(buffer_center)
-
-    # baru pakai nilai stabil ini
-    if label == "azqya" and stable_conf > 0.6:
-        # hitung jarak, kirim UART, dll
-        pass
-
-detected = False
-
-for r in result:
-    for box in r.boxes:
-        conf = float(box.conf[0])
-        cls = int(box.cls[0])
-        label = model.names[cls]
-
-        if conf < 0.55:
-            continue
-
-        x1, y1, x2, y2 = box.xyxy[0]
-        cx = (x1 + x2) / 2
-        cy = (y1 + y2) / 2
-
-        if label == "azqya":
-            detected = True
-            pos_cm = pixel_to_cm(cx, cy)
-            last_pos = pos_cm
-            print("Azqya terdeteksi:", pos_cm)
-
-if not detected:
-    print("Objek hilang, pakai last_pos:", last_pos)

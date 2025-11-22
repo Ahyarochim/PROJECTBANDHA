@@ -11,8 +11,8 @@ import sys
 
 
 #FILE
-model_path = r'best.pt'
-yml_File = r'calibration_Matrix.yaml'
+model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
+yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\calibration_Matrix.yamll'
 
 # SERIAL CONFIG (STM32)
 SERIAL_PORT = "/dev/ttyACM0"  # Ubah sesuai port STM32 di Linux (biasanya /dev/ttyUSB0 atau /dev/ttyACM0)
@@ -205,7 +205,7 @@ def UndistortFrame():
                                         
                                         data_sent = True  # Set flag supaya tidak kirim lagi
                                     except Exception as e:
-                                        print(f"\n❌ [ERROR] Gagal kirim ke STM32: {e}\n")
+                                        print(f"\n[ERROR] Gagal kirim ke STM32: {e}\n")
                         else:
                             # Reset flag jika jarak jauh dari 50cm (lebih dari 10cm)
                             if distance_cm is not None and abs(distance_cm - 50.0) > 10.0:
@@ -278,4 +278,5 @@ def UndistortFrame():
 
 
 
-UndistortFrame()
+if __name__ == "__main__":
+    UndistortFrame()
