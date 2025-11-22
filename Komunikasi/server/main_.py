@@ -5,18 +5,15 @@ import serial
 import threading
 import time
 
-
-SERIAL_PORT = "COM4"       # Ubah sesuai port STM32 kamu
+SERIAL_PORT = "/dev/ttyACM0"
 BAUDRATE = 115200
 ZMQ_PORT = 5555
 RUNNING = True
 
-
-# =====================================================
-# 🔹 Fungsi IP Detection
-# =====================================================
+# ========================================================================
+# IP detection
+# ========================================================================
 def get_primary_ip() -> str:
-    """Cari IP utama (bukan 127.x)."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         s.connect(("8.8.8.8", 80))
@@ -28,29 +25,26 @@ def get_primary_ip() -> str:
     return ip
 
 
-def list_ips():
-    """List semua IP IPv4 non-localhost."""
-    ips = {get_primary_ip()}
-    try:
-        import netifaces
-        for iface in netifaces.interfaces():
-            for a in netifaces.ifaddresses(iface).get(netifaces.AF_INET, []):
-                ip = a.get("addr")
-                if ip and not ip.startswith(("127.", "169.254.")):
-                    ips.add(ip)
-    except Exception:
-        pass
-    return sorted(ips)
-
-
-# =====================================================
-# 🔹 Serial Initialization
-# =====================================================
+# ========================================================================
+# Serial init
+# ========================================================================
 def init_serial():
-    """Buka koneksi serial ke STM32."""
     try:
-        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=0.1)
+        ser = serial.Serial(
+            port=SERIAL_PORT,
+            baudrate=BAUDRATE,
+            timeout=0.1,
+            write_timeout=2,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            xonxoff=False,
+            rtscts=False,
+            dsrdtr=False
+        )
         time.sleep(2)
+        ser.reset_input_buffer()
+        ser.reset_output_buffer()
         print(f"[OK] Connected to STM32 at {SERIAL_PORT} ({BAUDRATE} baud)")
         return ser
     except Exception as e:
@@ -58,10 +52,31 @@ def init_serial():
         sys.exit(1)
 
 
-# =====================================================
-# 🔹 Thread untuk baca data dari STM32
-# =====================================================
-def read_from_stm32(ser: serial.Serial):
+# ========================================================================
+# Safe serial write with error handling
+# ========================================================================
+def safe_serial_write(ser, data_str):
+    """Safely write to serial port with error handling and retry"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            ser.reset_output_buffer()
+            ser.write(data_str.encode())
+            ser.flush()
+            return True
+        except serial.SerialTimeoutException:
+            print(f"[WARN] Write timeout (attempt {attempt + 1}/{max_retries})")
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"[ERROR] Write failed (attempt {attempt + 1}/{max_retries}): {e}")
+            time.sleep(0.1)
+    return False
+
+
+# ========================================================================
+# Read thread
+# ========================================================================
+def read_from_stm32(ser):
     global RUNNING
     buffer = ""
     while RUNNING:
@@ -76,90 +91,101 @@ def read_from_stm32(ser: serial.Serial):
                         buffer = ""
                     else:
                         buffer += char
-        except Exception as e:
-            if RUNNING:
-                print(f"[ERROR] Serial read error: {e}")
+        except:
+            pass
         time.sleep(0.01)
 
 
-# =====================================================
-# 🔹 ZeroMQ Server — Terima data & kirim ke STM32
-# =====================================================
-def zmq_server(ser: serial.Serial):
+# ========================================================================
+# MANUAL INPUT THREAD
+# ========================================================================
+def manual_input_sender(ser):
+    global RUNNING
+    while RUNNING:
+        try:
+            user = input("[INPUT] Masukkan Vx,Vy,W,motor1,motor2,servo: ").strip()
+            if not user:
+                continue
+
+            parts = user.split(",")
+            if len(parts) != 6:
+                print("[WARN] Format harus: Vx,Vy,W,motor1,motor2,servo (6 nilai)")
+                continue
+
+            out_str = user + "\n"
+            print("[→ STM32] Sending", repr(out_str))
+            if not safe_serial_write(ser, out_str):
+                print("[ERROR] Failed to send data after retries")
+
+        except Exception as e:
+            print("[ERROR] manual input:", e)
+            break
+
+
+# ========================================================================
+# ZeroMQ server
+# ========================================================================
+def zmq_server(ser):
     global RUNNING
 
     ctx = zmq.Context()
     sock = ctx.socket(zmq.PULL)
-    bind_addr = f"tcp://10.105.96.203:{ZMQ_PORT}"  # Ganti IP sesuai PC kamu
+    bind_addr = f"tcp://10.106.19.63:{ZMQ_PORT}"
     sock.bind(bind_addr)
     sock.setsockopt(zmq.RCVTIMEO, 1000)
 
-    print("\n===============================================")
-    print("📡 ZeroMQ PULL server berjalan")
-    print(f"Bind address: {bind_addr}")
-    print("Akses dari perangkat lain:")
-    for ip in list_ips():
-        print(f"  → tcp://{ip}:{ZMQ_PORT}")
-    print("===============================================\n")
+    print("\n📡 ZMQ Server listening at:", bind_addr, "\n")
 
     while RUNNING:
         try:
             msg = sock.recv_string().strip()
             print(f"[ZMQ] Received: {msg}")
 
-            # --- 🔹 Parsing koordinat ---
-            try:
-                parts = [p.strip() for p in msg.split(",")]
-                if len(parts) == 4:
-                    x, y, z, g = parts
-                    print(f"  → Parsed → X={x}, Y={y}, Z={z}, G={g}")
-                else:
-                    print("[WARN] Invalid data format (expected 4 comma-separated values)")
-                    continue
-            except Exception as e:
-                print(f"[ERROR] Parsing error: {e}")
+            parts = msg.split(",")
+            if len(parts) != 6:
+                print("[WARN] Format salah (harus Vx,Vy,W,motor1,motor2,servo)")
                 continue
 
-            # --- 🔹 Kirim ke STM32 ---
-            if ser and ser.is_open:
-                # Format string untuk dikirim ke STM32
-                out_str = f"{x},{y},{z},{g}\n"
-                print("[→ STM32] Sending", repr(out_str))
-                ser.write(out_str.encode())
-                print(f"[→ STM32] Sent: {out_str.strip()}")
+            out_str = msg + "\n"
+            print("[→ STM32] Sending", repr(out_str))
+            if not safe_serial_write(ser, out_str):
+                print("[ERROR] Failed to send data after retries")
 
         except zmq.Again:
             continue
         except Exception as e:
-            print(f"[ERROR] ZMQ error: {e}")
+            print("[ERROR] ZMQ:", e)
             break
 
     sock.close()
     ctx.term()
-    print("[ZMQ] Server stopped")
 
 
-# =====================================================
-# 🔹 Main Program
-# =====================================================
+# ========================================================================
+# MAIN
+# ========================================================================
 def main():
     global RUNNING
     ser = init_serial()
 
-    t_serial = threading.Thread(target=read_from_stm32, args=(ser,), daemon=True)
-    t_serial.start()
+    # Read thread
+    threading.Thread(target=read_from_stm32, args=(ser,), daemon=True).start()
 
+    # Manual input thread
+    threading.Thread(target=manual_input_sender, args=(ser,), daemon=True).start()
+
+    # ZMQ server thread
     try:
         zmq_server(ser)
     except KeyboardInterrupt:
-        print("\n[INFO] Stopping...")
+        print("[INFO] Stop…")
     finally:
         RUNNING = False
         time.sleep(0.2)
         if ser.is_open:
             ser.close()
-        print("[OK] Serial port closed")
-        print("[EXIT] Program stopped")
+
+        print("[EXIT] Done.")
 
 
 if __name__ == "__main__":
