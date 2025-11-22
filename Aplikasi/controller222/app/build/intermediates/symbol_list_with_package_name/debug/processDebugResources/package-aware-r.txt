@@ -3559,6 +3559,8 @@ id percent
 id pin
 id position
 id postLayout
+id preset1
+id preset2
 id pressed
 id progress_circular
 id progress_horizontal

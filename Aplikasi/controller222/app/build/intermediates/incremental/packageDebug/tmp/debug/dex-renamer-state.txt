@@ -1,4 +1,4 @@
-#Fri Nov 21 22:21:00 WIB 2025
+#Fri Nov 21 22:44:32 WIB 2025
 base.0=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
 base.1=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
 base.2=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\7\\classes.dex

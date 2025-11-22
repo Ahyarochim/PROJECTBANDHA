@@ -50,6 +50,8 @@
         app:layout_constraintVertical_bias="0.586"
         app:srcCompat="@drawable/rotateright" />
 
+    <!-- Mode Switch -->
+
     <Button
         android:id="@+id/btnConnect"
         android:layout_width="wrap_content"
@@ -58,11 +60,13 @@
         android:textColor="@color/black"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.956"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.11" />
+        app:layout_constraintVertical_bias="0.044" />
 
-    <!-- Mode Switch -->
+
+    <!-- Joystick Info Text -->
+
+    <!-- Joystick -->
 
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/modeSwitch"
@@ -72,16 +76,12 @@
         android:text="Manual"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/btnSetting"
+        app:layout_constraintHorizontal_bias="0.182"
         app:layout_constraintStart_toEndOf="@+id/videoStream"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.303"
         app:thumbTint="#AA5EE0"
         app:trackTint="#E0E0E0" />
-
-
-    <!-- Joystick Info Text -->
-
-    <!-- Joystick -->
 
     <TextView
         android:id="@+id/modeStatusText"
@@ -112,9 +112,12 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/modeStatusText" />
-<!--        app:layout_constraintTop_toBottomOf="@+id/statusText"-->
-        app:layout_constraintVertical_bias="0.05" />
+        app:layout_constraintTop_toBottomOf="@+id/modeStatusText" /><![CDATA[
+        />
+
+    ]]><!-- Koordinat Display -->
+
+    <!-- Setting Button -->
 
     <com.example.controllerzmq.JoystickView
         android:id="@+id/joystick"
@@ -122,16 +125,14 @@
         android:layout_height="200dp"
         android:layout_centerInParent="true"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintEnd_toStartOf="@+id/videoStream"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.687"
+        app:layout_constraintVertical_bias="0.734"
         tools:ignore="MissingConstraints" />
 
-    <!-- Koordinat Display -->
 
-    <!-- Setting Button -->
+    <!-- Bottom Navigation -->
 
     <TextView
         android:id="@+id/koord"
@@ -139,15 +140,11 @@
         android:layout_height="wrap_content"
         android:text="koordinat"
         android:textColor="@color/black"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.102"
+        app:layout_constraintBottom_toTopOf="@+id/joystick"
+        app:layout_constraintEnd_toStartOf="@+id/videoStream"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.321" />
-
-
-    <!-- Bottom Navigation -->
+        app:layout_constraintVertical_bias="1.0" />
 
     <ImageButton
         android:id="@+id/btnSetting"
@@ -159,10 +156,10 @@
         android:minHeight="48dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.976"
+        app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/btnConnect"
-        app:layout_constraintVertical_bias="0.052"
+        app:layout_constraintVertical_bias="0.0"
         app:srcCompat="@drawable/ip" />
 
     <com.google.android.material.slider.Slider
@@ -246,5 +243,29 @@
         app:layout_constraintStart_toStartOf="@+id/gripper3"
         app:layout_constraintTop_toBottomOf="@+id/gripper"
         app:layout_constraintVertical_bias="1.0" />
+
+    <Button
+        android:id="@+id/preset1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Button"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.122"
+        app:layout_constraintStart_toEndOf="@+id/videoStream"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.044" />
+
+    <Button
+        android:id="@+id/preset2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Button"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.122"
+        app:layout_constraintStart_toEndOf="@+id/videoStream"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.17" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
