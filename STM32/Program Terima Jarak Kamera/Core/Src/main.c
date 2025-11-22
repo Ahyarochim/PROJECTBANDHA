@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body - XY Distance Receiver
+  * @brief          : Main program body - XY Distance Receiver with ACK
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -28,6 +28,7 @@ uint8_t rxIndex = 0;
 volatile float distance_x_cm = 0.0f;
 volatile float distance_y_cm = 0.0f;
 volatile uint8_t data_received = 0;  // Flag data baru
+volatile uint32_t data_count = 0;    // Counter berapa kali data diterima
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -36,6 +37,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void parseXYData(char *buffer);
+void sendAcknowledgment(char *original_data);
 /* USER CODE END PFP */
 
 /**
@@ -69,7 +71,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /* Kirim pesan startup */
-  char startMsg[] = "STM32 Ready - Waiting for XY data...\r\n";
+  char startMsg[] = "\r\n=== STM32 Ready - Waiting for XY data ===\r\n";
   HAL_UART_Transmit(&huart1, (uint8_t*)startMsg, strlen(startMsg), 100);
 
   /* Mulai terima byte via interrupt */
@@ -85,9 +87,10 @@ int main(void)
     float debug_x = distance_x_cm;
     float debug_y = distance_y_cm;
     uint8_t debug_flag = data_received;
+    uint32_t debug_count = data_count;
 
-    // Bisa tambahkan logika lain di sini berdasarkan distance_x_cm dan distance_y_cm
-    // Contoh: kontrol motor, LED, dll
+    // TODO: Tambahkan logika kontrol motor/aktuator di sini
+    // Contoh: if (distance_x_cm > 5.0) { /* gerakkan motor kanan */ }
 
     /* USER CODE END WHILE */
 
@@ -105,9 +108,6 @@ void SystemClock_Config(void)
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
@@ -120,8 +120,6 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
@@ -142,13 +140,6 @@ void SystemClock_Config(void)
   */
 static void MX_USART1_UART_Init(void)
 {
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
   huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
@@ -161,9 +152,6 @@ static void MX_USART1_UART_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
 }
 
 /**
@@ -173,17 +161,8 @@ static void MX_USART1_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -196,22 +175,53 @@ static void MX_GPIO_Init(void)
 void parseXYData(char *buffer)
 {
     char *ptr;
+    float temp_x = 0.0f;
+    float temp_y = 0.0f;
+    uint8_t valid = 0;
 
     // Cari "X:"
     ptr = strstr(buffer, "X:");
     if (ptr != NULL)
     {
-        distance_x_cm = atof(ptr + 2);  // Skip "X:"
+        temp_x = atof(ptr + 2);  // Skip "X:"
+        valid++;
     }
 
     // Cari "Y:"
     ptr = strstr(buffer, "Y:");
     if (ptr != NULL)
     {
-        distance_y_cm = atof(ptr + 2);  // Skip "Y:"
+        temp_y = atof(ptr + 2);  // Skip "Y:"
+        valid++;
     }
 
-    data_received = 1;  // Set flag
+    // Update variabel global hanya jika kedua nilai valid
+    if (valid == 2)
+    {
+        distance_x_cm = temp_x;
+        distance_y_cm = temp_y;
+        data_received = 1;
+        data_count++;
+    }
+}
+
+/**
+  * @brief  Kirim acknowledgment ke Python bahwa data sudah diterima
+  * @param  original_data: Data asli yang diterima
+  * @retval None
+  */
+void sendAcknowledgment(char *original_data)
+{
+    char ackMsg[128];
+
+    // Format: "RX: X:10.50,Y:-5.25 | X=10.50 Y=-5.25 [#123]"
+    sprintf(ackMsg, "RX: %s | X=%.2f Y=%.2f [#%lu]\r\n",
+            original_data,
+            distance_x_cm,
+            distance_y_cm,
+            data_count);
+
+    HAL_UART_Transmit(&huart1, (uint8_t*)ackMsg, strlen(ackMsg), 100);
 }
 
 /**
@@ -233,15 +243,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
                 // Parse data format "X:10.50,Y:-5.25"
                 parseXYData(rxBuffer);
 
-                // Debug: kirim kembali data yang diterima
-                char msg[100];
-                sprintf(msg, "Received: %s -> X=%.2f, Y=%.2f cm\r\n",
-                        rxBuffer, distance_x_cm, distance_y_cm);
-                HAL_UART_Transmit(&huart1, (uint8_t*)msg, strlen(msg), 100);
+                // KIRIM ACKNOWLEDGMENT KE PYTHON
+                sendAcknowledgment(rxBuffer);
 
-                // Reset buffer untuk data berikutnya
+                // PENTING: Reset buffer untuk data berikutnya
                 rxIndex = 0;
                 memset(rxBuffer, 0, sizeof(rxBuffer));
+
+                // Optional: Toggle LED untuk indikasi visual
+                // HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
             }
         }
         else
@@ -253,13 +263,16 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
             }
             else
             {
-                // Buffer overflow, reset
+                // Buffer overflow, kirim error dan reset
+                char errMsg[] = "ERROR: Buffer overflow!\r\n";
+                HAL_UART_Transmit(&huart1, (uint8_t*)errMsg, strlen(errMsg), 100);
+
                 rxIndex = 0;
                 memset(rxBuffer, 0, sizeof(rxBuffer));
             }
         }
 
-        // Terima byte berikutnya
+        // PENTING: Terima byte berikutnya
         HAL_UART_Receive_IT(&huart1, &rxByte, 1);
     }
 }
@@ -272,27 +285,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
   */
 void Error_Handler(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
   __disable_irq();
   while (1)
   {
   }
-  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
 }
-#endif /* USE_FULL_ASSERT */
+#endif
