@@ -1,0 +1,15 @@
+# config.py
+
+MODEL_PATH = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
+CALIB_FILE = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\calibration_Matrix.yaml'
+
+IP_HP = "10.104.17.134"
+PORT = 6000
+WIDTH, HEIGHT = 480, 360
+FPS = 15
+JPEG_QUALITY = 50
+MAX_PACKET_SIZE = 60000
+
+PIXEL_PER_CM = 8
+CM_TO_PULSE = 14.7
+MARGIN = 100

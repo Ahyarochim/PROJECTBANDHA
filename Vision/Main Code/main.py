@@ -108,7 +108,7 @@ def UndistortFrame():
                 if len(bufferConf) == 5:
                     stable_conf = sum(bufferConf) / 5
 
-                    if label == "bukan azqya" and stable_conf > 0.6:
+                    if label == "Azqya" and stable_conf > 0.6:
                         detected = True
                         obj_cx, obj_cy = cx, cy
 
@@ -119,13 +119,13 @@ def UndistortFrame():
 
         annotated = results[0].plot() if results else undist.copy()
 
-        # Pastikan annotated frame punya ukuran yang sama
+        # annotated frame punya ukuran yang sama
         ann_h, ann_w = annotated.shape[:2]
         center_x = ann_w // 2
         center_y = ann_h // 2
 
         # warna indikator
-        color = (0, 255, 0) if in_center else (0, 0, 255)
+        color = (255, 0, 0) if in_center else (0, 0, 255)
 
         # garis tengah vertikal
         cv2.line(annotated, (center_x, 0), (center_x, ann_h), color, 2)
@@ -152,6 +152,9 @@ def UndistortFrame():
 
         if key == ord('q'):
             break
+        if cv2.getWindowProperty(WINDOW_NAME,cv2.WND_PROP_VISIBLE) <1 :
+            break
+        
         if key == ord('c'):
             auto_capture = True
         if key == ord('x'):
