@@ -52,6 +52,24 @@
 
     <!-- Mode Switch -->
 
+
+    <!-- gripper-->
+
+    <!-- Joystick -->
+
+    <Button
+        android:id="@+id/btnGripper"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="gripper"
+        android:textColor="@color/black"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.915"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/gripper2"
+        app:layout_constraintVertical_bias="0.0" />
+
     <Button
         android:id="@+id/btnConnect"
         android:layout_width="wrap_content"
@@ -60,13 +78,9 @@
         android:textColor="@color/black"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/preset1"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.044" />
-
-
-    <!-- Joystick Info Text -->
-
-    <!-- Joystick -->
 
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/modeSwitch"
@@ -83,6 +97,10 @@
         app:thumbTint="#AA5EE0"
         app:trackTint="#E0E0E0" />
 
+    <!-- Koordinat Display -->
+
+    <!-- Setting Button -->
+
     <TextView
         android:id="@+id/modeStatusText"
         android:layout_width="wrap_content"
@@ -97,14 +115,13 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/videoStream"
-        app:layout_constraintVertical_bias="0.076" />
+        app:layout_constraintVertical_bias="0.0" />
 
     <TextView
         android:id="@+id/valJoy"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_marginBottom="72dp"
         android:text="Gerakkan Joystick!"
         android:textColor="@color/black"
         android:textSize="24sp"
@@ -112,9 +129,8 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/modeStatusText" /><!-- Koordinat Display -->
-
-    <!-- Setting Button -->
+        app:layout_constraintTop_toBottomOf="@+id/modeStatusText"
+        app:layout_constraintVertical_bias="0.959" />
 
     <com.example.controllerzmq.JoystickView
         android:id="@+id/joystick"
@@ -185,19 +201,6 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.713" />
 
-    <com.google.android.material.slider.Slider
-        android:id="@+id/gripper3"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:valueFrom="0"
-        android:valueTo="1"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.845" />
-
     <TextView
         android:id="@+id/tvGripper1Value"
         android:layout_width="wrap_content"
@@ -227,19 +230,6 @@
         app:layout_constraintVertical_bias="1.0" />
 
     <!-- Tambahkan setelah slider gripper3 -->
-    <TextView
-        android:id="@+id/tvGripper3Value"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Gripper 3: 0.00"
-        android:textColor="@color/black"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/gripper3"
-        app:layout_constraintEnd_toEndOf="@+id/gripper3"
-        app:layout_constraintStart_toStartOf="@+id/gripper3"
-        app:layout_constraintTop_toBottomOf="@+id/gripper"
-        app:layout_constraintVertical_bias="1.0" />
 
     <Button
         android:id="@+id/preset1"

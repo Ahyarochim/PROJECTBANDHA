@@ -3283,6 +3283,7 @@ id bounceBoth
 id bounceEnd
 id bounceStart
 id btnConnect
+id btnGripper
 id btnRotateLeft
 id btnRotateRight
 id btnSend
@@ -3401,7 +3402,6 @@ id graph
 id graph_wrap
 id gripper
 id gripper2
-id gripper3
 id group_divider
 id grouping
 id groups
@@ -3691,7 +3691,6 @@ id transition_transform
 id triangle
 id tvGripper1Value
 id tvGripper2Value
-id tvGripper3Value
 id tvStatus
 id unchecked
 id uniform

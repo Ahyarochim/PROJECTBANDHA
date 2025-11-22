@@ -30,17 +30,17 @@ public class MainActivity extends AppCompatActivity {
 
     private UDPReceiver receiver;
     private ImageView videoStream;
-    private Button btnConnect;
+    private Button btnConnect, preset1, preset2, btnGripper;
     private ImageButton btnSetting, btnRotateRight, btnRotateLeft;
-    private TextView koor, tvGripper1Value, tvGripper2Value, tvGripper3Value;
+    private TextView koor, tvGripper1Value, tvGripper2Value;
     private String msg;
     private JoystickView joystick;
     private TextView petunjuk;
     private SwitchMaterial modeSwitch;
     private TextView modeStatusText;
-    private Slider gripper1, gripper2, gripper3;
+    private Slider gripper1, gripper2;
 
-    private float valX = 0f, valY = 0f, valRotation = 0f, valA = 0f, valB = 0f, valC = 0f;
+    private float valX = 0f, valY = 0f, valRotation = 0f, valA = 0f, valB = 0f;
 
     private Handler handler = new Handler(Looper.getMainLooper());
 
@@ -49,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean isConnected = false;
     private boolean isManualMode = true; // Default: Manual Mode
+    private boolean isGripping = false; // Status gripper
 
     private String serverIp = "10.107.137.167";
     private int serverPort = 6000; // Port untuk kirim joystick data
@@ -71,7 +72,6 @@ public class MainActivity extends AppCompatActivity {
 
         setupSystemInsets();
 
-
         prefs = getSharedPreferences("ZMQ_PREFS", MODE_PRIVATE);
         serverIp = prefs.getString("IP", serverIp);
         serverPort = prefs.getInt("PORT", serverPort);
@@ -89,13 +89,20 @@ public class MainActivity extends AppCompatActivity {
 
         gripper1 = findViewById(R.id.gripper);
         gripper2 = findViewById(R.id.gripper2);
-        gripper3 = findViewById(R.id.gripper3);
 
         tvGripper1Value = findViewById(R.id.tvGripper1Value);
         tvGripper2Value = findViewById(R.id.tvGripper2Value);
-        tvGripper3Value = findViewById(R.id.tvGripper3Value);
+
+        // Inisialisasi preset buttons
+        preset1 = findViewById(R.id.preset1);
+        preset2 = findViewById(R.id.preset2);
+
+        // Inisialisasi gripper button
+        btnGripper = findViewById(R.id.btnGripper);
 
         setupSliderListeners();
+        setupPresetButtons();
+        setupGripperButton();
 
         // Setup mode switch listener
         modeSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -105,11 +112,11 @@ public class MainActivity extends AppCompatActivity {
             if (isConnected) {
                 if (isManualMode) {
                     // Switching to Manual Mode
-                    sendModeCommand("MANUAL");
+//                    sendModeCommand("MANUAL");
                     Toast.makeText(this, "Switched to Manual Mode", Toast.LENGTH_SHORT).show();
                 } else {
                     // Switching to Autonomous Mode
-                    sendModeCommand("AUTO");
+//                    sendModeCommand("AUTO");
                     Toast.makeText(this, "Switched to Autonomous Mode", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -148,6 +155,77 @@ public class MainActivity extends AppCompatActivity {
         updateModeDisplay();
     }
 
+    private void setupGripperButton() {
+        btnGripper.setOnClickListener(v -> toggleGripper());
+    }
+
+    private void toggleGripper() {
+        if (!isConnected) {
+            Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (!isManualMode) {
+            Toast.makeText(this, "Gripper only works in Manual Mode", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        isGripping = !isGripping;
+
+        if (isGripping) {
+            // Status gripping aktif
+            btnGripper.setText("GRIPPING");
+            btnGripper.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
+            sendGripperCommand("GRIP_ON");
+            Toast.makeText(this, "Gripper Activated", Toast.LENGTH_SHORT).show();
+        } else {
+            // Status gripping nonaktif
+            btnGripper.setText("GRIPPER");
+            btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
+            sendGripperCommand("GRIP_OFF");
+            Toast.makeText(this, "Gripper Released", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void sendGripperCommand(String command) {
+        if (socket != null && isConnected && isManualMode) {
+            String msg = "GRIPPER:" + command;
+            socket.send(msg.getBytes(ZMQ.CHARSET));
+            Log.d("ZMQ", "Sent gripper command: " + msg);
+        }
+    }
+
+    private void setupPresetButtons() {
+        // Preset 1 button - mengirim "1" ke ZMQ
+        preset1.setOnClickListener(v -> {
+            if (isConnected) {
+                sendPresetCommand(1);
+                Toast.makeText(this, "Preset 1 activated", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Preset 2 button - mengirim "2" ke ZMQ
+        preset2.setOnClickListener(v -> {
+            if (isConnected) {
+                sendPresetCommand(2);
+                Toast.makeText(this, "Preset 2 activated", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void sendPresetCommand(int presetNumber) {
+        if (socket != null && isConnected) {
+            // Kirim format: "PRESET:1" atau "PRESET:2"
+            String msg = "PRESET:" + presetNumber;
+            socket.send(msg.getBytes(ZMQ.CHARSET));
+            Log.d("ZMQ", "Sent preset command: " + msg);
+        }
+    }
+
     private void setupSliderListeners() {
         // Gripper 1 listener
         gripper1.addOnChangeListener((slider, value, fromUser) -> {
@@ -169,22 +247,12 @@ public class MainActivity extends AppCompatActivity {
                 sendSliderData();
             }
         });
-
-        // Gripper 3 listener
-        gripper3.addOnChangeListener((slider, value, fromUser) -> {
-            valC = value;
-            tvGripper3Value.setText(String.format("Gripper 3: %.2f", valC));
-
-            if (isConnected && isManualMode) {
-                sendSliderData();
-            }
-        });
     }
 
     private void sendSliderData() {
         if (socket != null && isConnected && isManualMode) {
             // Format: abc,value1,value2,value3
-            String msg = String.format("abc,%.2f,%.2f,%.2f", valA, valB, valC);
+            String msg = String.format("abc,%.2f,%.2f,%.2f", valA, valB);
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent slider data: " + msg);
         }
@@ -193,22 +261,24 @@ public class MainActivity extends AppCompatActivity {
     private void resetSliders() {
         valA = 0f;
         valB = 0f;
-        valC = 0f;
 
         gripper1.setValue(0f);
         gripper2.setValue(0f);
-        gripper3.setValue(0f);
 
         tvGripper1Value.setText("Gripper 1: 0.00");
         tvGripper2Value.setText("Gripper 2: 0.00");
-        tvGripper3Value.setText("Gripper 3: 0.00");
+
+        // Reset button gripper
+        isGripping = false;
+        if (btnGripper != null) {
+            btnGripper.setText("GRIPPER");
+            btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
+        }
 
         if (isConnected && isManualMode) {
             sendSliderData();
         }
     }
-
-
 
     private void updateModeDisplay() {
         if (isManualMode) {
@@ -220,14 +290,17 @@ public class MainActivity extends AppCompatActivity {
             // Enable sliders in manual mode
             gripper1.setEnabled(true);
             gripper2.setEnabled(true);
-            gripper3.setEnabled(true);
             gripper1.setAlpha(1.0f);
             gripper2.setAlpha(1.0f);
-            gripper3.setAlpha(1.0f);
 
             // Enable joystick in manual mode
             joystick.setEnabled(true);
             joystick.setAlpha(1.0f);
+
+            // Enable gripper button in manual mode
+            btnGripper.setEnabled(true);
+            btnGripper.setAlpha(1.0f);
+
         } else {
             modeStatusText.setText("Mode: AUTONOMOUS");
             modeStatusText.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
@@ -237,36 +310,45 @@ public class MainActivity extends AppCompatActivity {
             // Disable sliders in autonomous mode
             gripper1.setEnabled(false);
             gripper2.setEnabled(false);
-            gripper3.setEnabled(false);
             gripper1.setAlpha(0.5f);
             gripper2.setAlpha(0.5f);
-            gripper3.setAlpha(0.5f);
 
-            // Disable joystick in autonomous mode (optional visual feedback)
+            // Disable joystick in autonomous mode
             joystick.setEnabled(false);
             joystick.setAlpha(0.5f);
+
+            // Disable gripper button in autonomous mode
+            btnGripper.setEnabled(false);
+            btnGripper.setAlpha(0.5f);
+
+            // Reset gripper state when switching to autonomous
+            if (isGripping) {
+                isGripping = false;
+                btnGripper.setText("GRIPPER");
+                btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
+            }
         }
     }
 
-    private void sendModeCommand(String mode) {
-        if (socket != null && isConnected) {
-            String msg = "MODE:" + mode;
-            socket.send(msg.getBytes(ZMQ.CHARSET));
-            Log.d("ZMQ", "Sent mode command: " + msg);
-        }
-    }
+//    private void sendModeCommand(String mode) {
+//        if (socket != null && isConnected) {
+//            String msg = "MODE:" + mode;
+//            socket.send(msg.getBytes(ZMQ.CHARSET));
+//            Log.d("ZMQ", "Sent mode command: " + msg);
+//        }
+//    }
 
     private String getDirectionText(int direction) {
         switch (direction) {
             case 0: return "CENTER ●";
             case 1: return "ATAS ↑";
-            case 2: return "KANAN ATAS ↗";
+            case 2: return "KANAN BAWAH ↘";
             case 3: return "KANAN →";
-            case 4: return "KANAN BAWAH ↘";
+            case 4: return "KANAN ATAS ↗";
             case 5: return "BAWAH ↓";
-            case 6: return "KIRI BAWAH ↙";
+            case 6: return "KIRI ATAS ↖";
             case 7: return "KIRI ←";
-            case 8: return "KIRI ATAS ↖";
+            case 8: return "KIRI BAWAH ↙";
             default: return "???";
         }
     }
@@ -350,11 +432,11 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "Connected to server", Toast.LENGTH_SHORT).show();
 
                     // Send initial mode command
-                    if (isManualMode) {
-                        sendModeCommand("MANUAL");
-                    } else {
-                        sendModeCommand("AUTO");
-                    }
+//                    if (isManualMode) {
+//                        sendModeCommand("MANUAL");
+//                    } else {
+//                        sendModeCommand("AUTO");
+//                    }
                 });
             } catch (Exception e) {
                 Log.e("ZMQ", "Connection failed", e);
@@ -403,7 +485,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }).start();
     }
-
 
     @Override
     protected void onDestroy() {

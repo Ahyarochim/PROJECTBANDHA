@@ -31,6 +31,7 @@ drawable status_sending
 drawable tombol
 id bottom_navigation
 id btnConnect
+id btnGripper
 id btnRotateLeft
 id btnRotateRight
 id btnSend
@@ -42,7 +43,6 @@ id etMessage
 id etPort
 id gripper
 id gripper2
-id gripper3
 id joystick
 id koord
 id modeStatusText
@@ -52,7 +52,6 @@ id preset2
 id scrollContent
 id tvGripper1Value
 id tvGripper2Value
-id tvGripper3Value
 id tvStatus
 id valJoy
 id videoStream

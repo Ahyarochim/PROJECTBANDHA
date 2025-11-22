@@ -45,6 +45,22 @@ public final class ActivityControllerBinding implements ViewBinding {
   @NonNull
   public final Button btnConnect;
 
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
+  public final Button btnGripper;
+
   @NonNull
   public final ImageButton btnRotateLeft;
 
@@ -88,22 +104,6 @@ public final class ActivityControllerBinding implements ViewBinding {
    */
   @Nullable
   public final Slider gripper2;
-
-  /**
-   * This binding is not available in all configurations.
-   * <p>
-   * Present:
-   * <ul>
-   *   <li>layout-land/</li>
-   * </ul>
-   *
-   * Absent:
-   * <ul>
-   *   <li>layout/</li>
-   * </ul>
-   */
-  @Nullable
-  public final Slider gripper3;
 
   @NonNull
   public final JoystickView joystick;
@@ -207,22 +207,6 @@ public final class ActivityControllerBinding implements ViewBinding {
   @Nullable
   public final TextView tvGripper2Value;
 
-  /**
-   * This binding is not available in all configurations.
-   * <p>
-   * Present:
-   * <ul>
-   *   <li>layout-land/</li>
-   * </ul>
-   *
-   * Absent:
-   * <ul>
-   *   <li>layout/</li>
-   * </ul>
-   */
-  @Nullable
-  public final TextView tvGripper3Value;
-
   @NonNull
   public final TextView valJoy;
 
@@ -231,24 +215,23 @@ public final class ActivityControllerBinding implements ViewBinding {
 
   private ActivityControllerBinding(@NonNull ConstraintLayout rootView,
       @Nullable BottomNavigationView bottomNavigation, @NonNull Button btnConnect,
-      @NonNull ImageButton btnRotateLeft, @NonNull ImageButton btnRotateRight,
-      @NonNull ImageButton btnSetting, @NonNull ConstraintLayout controller,
-      @Nullable Slider gripper, @Nullable Slider gripper2, @Nullable Slider gripper3,
+      @Nullable Button btnGripper, @NonNull ImageButton btnRotateLeft,
+      @NonNull ImageButton btnRotateRight, @NonNull ImageButton btnSetting,
+      @NonNull ConstraintLayout controller, @Nullable Slider gripper, @Nullable Slider gripper2,
       @NonNull JoystickView joystick, @NonNull TextView koord, @Nullable TextView modeStatusText,
       @Nullable SwitchMaterial modeSwitch, @Nullable Button preset1, @Nullable Button preset2,
       @Nullable TextView tvGripper1Value, @Nullable TextView tvGripper2Value,
-      @Nullable TextView tvGripper3Value, @NonNull TextView valJoy,
-      @NonNull ImageView videoStream) {
+      @NonNull TextView valJoy, @NonNull ImageView videoStream) {
     this.rootView = rootView;
     this.bottomNavigation = bottomNavigation;
     this.btnConnect = btnConnect;
+    this.btnGripper = btnGripper;
     this.btnRotateLeft = btnRotateLeft;
     this.btnRotateRight = btnRotateRight;
     this.btnSetting = btnSetting;
     this.controller = controller;
     this.gripper = gripper;
     this.gripper2 = gripper2;
-    this.gripper3 = gripper3;
     this.joystick = joystick;
     this.koord = koord;
     this.modeStatusText = modeStatusText;
@@ -257,7 +240,6 @@ public final class ActivityControllerBinding implements ViewBinding {
     this.preset2 = preset2;
     this.tvGripper1Value = tvGripper1Value;
     this.tvGripper2Value = tvGripper2Value;
-    this.tvGripper3Value = tvGripper3Value;
     this.valJoy = valJoy;
     this.videoStream = videoStream;
   }
@@ -298,6 +280,9 @@ public final class ActivityControllerBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.btnGripper;
+      Button btnGripper = ViewBindings.findChildViewById(rootView, id);
+
       id = R.id.btnRotateLeft;
       ImageButton btnRotateLeft = ViewBindings.findChildViewById(rootView, id);
       if (btnRotateLeft == null) {
@@ -323,9 +308,6 @@ public final class ActivityControllerBinding implements ViewBinding {
 
       id = R.id.gripper2;
       Slider gripper2 = ViewBindings.findChildViewById(rootView, id);
-
-      id = R.id.gripper3;
-      Slider gripper3 = ViewBindings.findChildViewById(rootView, id);
 
       id = R.id.joystick;
       JoystickView joystick = ViewBindings.findChildViewById(rootView, id);
@@ -357,9 +339,6 @@ public final class ActivityControllerBinding implements ViewBinding {
       id = R.id.tvGripper2Value;
       TextView tvGripper2Value = ViewBindings.findChildViewById(rootView, id);
 
-      id = R.id.tvGripper3Value;
-      TextView tvGripper3Value = ViewBindings.findChildViewById(rootView, id);
-
       id = R.id.valJoy;
       TextView valJoy = ViewBindings.findChildViewById(rootView, id);
       if (valJoy == null) {
@@ -373,9 +352,9 @@ public final class ActivityControllerBinding implements ViewBinding {
       }
 
       return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation,
-          btnConnect, btnRotateLeft, btnRotateRight, btnSetting, controller, gripper, gripper2,
-          gripper3, joystick, koord, modeStatusText, modeSwitch, preset1, preset2, tvGripper1Value,
-          tvGripper2Value, tvGripper3Value, valJoy, videoStream);
+          btnConnect, btnGripper, btnRotateLeft, btnRotateRight, btnSetting, controller, gripper,
+          gripper2, joystick, koord, modeStatusText, modeSwitch, preset1, preset2, tvGripper1Value,
+          tvGripper2Value, valJoy, videoStream);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));
