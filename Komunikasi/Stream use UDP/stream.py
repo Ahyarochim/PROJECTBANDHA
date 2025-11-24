@@ -1,258 +1,296 @@
+# full_stream_yolo_center_fixed.py
 import cv2
 import socket
 from ultralytics import YOLO
-import os
 import numpy as np
 import yaml
 from collections import deque
-import struct
 import time
 import serial
+import sys
+import traceback
 
-
-#FILE
+# -------------------------
+# CONFIG (sesuaikan jika perlu)
+# -------------------------
 model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
-yml_File= r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\Calibration_Matrix copy.yaml'
+yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\Calibration_Matrix copy.yaml'
 
-# ===== SERIAL CONFIG (STM32) =====
-SERIAL_PORT = "COM3"  # Windows: "COM3", "COM4", dll | Linux: "/dev/ttyACM0" atau "/dev/ttyUSB0"
+SERIAL_PORT = "COM3"
 BAUDRATE = 115200
 
-# ===== UDP CONFIG =====
-IP_HP = "10.105.129.186"
+BROADCAST_IP = "255.255.255.255"
 Port = 6000
-WIDTH, HEIGHT = 360, 400
-FPS = 30
-JPEG_QUALITY = 30
-MAX_PACKET_SIZE = 60000  
 
-model = YOLO(model_path)
+# Kamera request (hint)
+REQ_W, REQ_H = 360, 400   # hint ke driver (landscape before rotate)
+FPS = 20
 
-# GARIS INDIKATOR
+# ukuran kecil yang dipakai YOLO (portrait orientation)
+# gunakan ukuran cukup besar untuk kualitas, tetapi masih ringan
+YOLO_W, YOLO_H = 480, 640  # small image for speed (portrait: width x height)
+
+# JPEG quality untuk broadcast
+JPEG_QUALITY = 90
+
+# center / detection params
 margin = 100
 bufferConf = deque(maxlen=5)
+CONF_THRESHOLD = 0.6
 
-# LOAD KALIBRASI
-def loadCalibration(path):
-    try:
-        with open(path, 'r') as f:
-            data = yaml.safe_load(f)
+DEBUG = True
+USE_UNDISTORT = False   # toggle undistort (False = lebih ringan)
 
-        print(">> DEBUG: Keys:", data.keys())
-        print(">> DEBUG: CameraMatrix:", data["CameraMatrix"])
-        print(">> DEBUG: dist_coeff:", data["dist_coeff"])
-        print(">> DEBUG: PIXEL_PER_CM:", data["PIXEL_PER_CM"])
-        
-        mtx = np.array(data["CameraMatrix"])
-        dist = np.array(data["dist_coeff"])
-        dist = dist.reshape(1, -1)
-        pxlPercm = float(data["PIXEL_PER_CM"])
+# -------------------------
+# INIT
+# -------------------------
+# load model
+model = YOLO(model_path)
 
-        return mtx, dist, pxlPercm
-    except Exception as e:
-        print(f"Kalibrasi gagal: {e}")
-        return None, None, None
+# choose device: cuda if available, else cpu
+try:
+    import torch
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+except Exception:
+    DEVICE = "cpu"
 
-
-# ===== INIT SERIAL =====
-def init_serial():
-    """Inisialisasi koneksi serial ke STM32."""
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=0.1)
-        time.sleep(2)  # Tunggu STM32 siap
-        print(f"[OK] Connected to STM32 at {SERIAL_PORT} ({BAUDRATE} baud)")
-        return ser
-    except Exception as e:
-        print(f"[ERROR] Cannot open serial port: {e}")
-        print("[INFO] Program will continue without serial communication")
-        return None
-
+print(f"[INFO] Using device: {DEVICE}")
 
 # SOCKET
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
-sock.settimeout(1.0) 
+sock.settimeout(1.0)
 
 # CAMERA
 Camera = cv2.VideoCapture(0)
-Camera.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
-Camera.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
+Camera.set(cv2.CAP_PROP_FRAME_WIDTH, REQ_W)
+Camera.set(cv2.CAP_PROP_FRAME_HEIGHT, REQ_H)
 Camera.set(cv2.CAP_PROP_FPS, FPS)
 Camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 if not Camera.isOpened():
-    print(" Kamera tidak bisa dibuka!")
-    exit()
+    print("Kamera tidak bisa dibuka!")
+    sys.exit(1)
 
-frame_count = 0
-target_delay = 1.0 / FPS
+# -------------------------
+# HELPERS
+# -------------------------
+def loadCalibration(path):
+    try:
+        with open(path, 'r') as f:
+            data = yaml.safe_load(f)
+        mtx = np.array(data["CameraMatrix"], dtype=np.float64)
+        dist = np.array(data["dist_coeff"], dtype=np.float64).reshape(1, -1)
+        pxlPercm = float(data.get("PIXEL_PER_CM", 10.0))
+        return mtx, dist, pxlPercm
+    except Exception as e:
+        print("[WARN] Load calibration failed:", e)
+        return None, None, 10.0
 
+def init_serial():
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=0.1)
+        time.sleep(2)
+        print("[OK] STM32 Connected")
+        return ser
+    except Exception as e:
+        print("[WARN] Serial gagal dibuka:", e)
+        return None
 
-# ===== MAIN LOOP =====
+# -------------------------
+# DRAW helper (manual drawing to keep quality)
+# -------------------------
+def draw_box_and_label(img, xy1, xy2, label_text=None, conf=None, color=(255,0,0), thickness=2):
+    x1,y1 = int(xy1[0]), int(xy1[1])
+    x2,y2 = int(xy2[0]), int(xy2[1])
+    cv2.rectangle(img, (x1,y1), (x2,y2), color, thickness)
+    if label_text:
+        txt = f"{label_text}" + (f" {conf:.2f}" if conf is not None else "")
+        (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
+        # background rectangle
+        cv2.rectangle(img, (x1, y1 - th - 6), (x1 + tw + 6, y1), color, -1)
+        cv2.putText(img, txt, (x1 + 3, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1, cv2.LINE_AA)
+
+# -------------------------
+# MAIN
+# -------------------------
 def UndistortFrame():
-    # Inisialisasi serial
+    global USE_UNDISTORT, mapx, mapy
+
     ser = init_serial()
-    
     mtx, dist, pxlPercm = loadCalibration(yml_File)
-    if mtx is None or dist is None:
-        if ser and ser.is_open:
-            ser.close()
-        return
-    
-    w = int(Camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(Camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    new_mtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w, h), 1, (w, h))
-    mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, new_mtx, (w, h), 5)
-    
-    # Flag untuk tracking pengiriman data
+
+    # prepare undistort maps if enabled
+    mapx = mapy = None
+    if USE_UNDISTORT and mtx is not None and dist is not None:
+        cam_w = int(Camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+        cam_h = int(Camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        new_mtx, _ = cv2.getOptimalNewCameraMatrix(mtx, dist, (cam_w, cam_h), 1, (cam_w, cam_h))
+        mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, new_mtx, (cam_w, cam_h), cv2.CV_32FC1)
+        print("[INFO] Undistort maps ready")
+    else:
+        if USE_UNDISTORT:
+            print("[WARN] Undistort requested but calibration missing. Skipping undistort.")
+        USE_UNDISTORT = False
+
     data_sent = False
-    
+
     try:
         while True:
             ret, frame = Camera.read()
             if not ret:
                 continue
-            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            # UNDISTORT & DETECT
-            undistorted_frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
-            results = model(undistorted_frame, device='cpu')
+
+            # undistort if enabled
+            if USE_UNDISTORT and mapx is not None:
+                frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
+
+            # rotate to portrait (so UI expects portrait)
+            rot = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+            # original rot size (keep for annotation quality)
+            rot_h, rot_w = rot.shape[:2]
+
+            # prepare small image for YOLO (keep portrait orientation)
+            # maintain aspect: we resize to YOLO_W x YOLO_H (portrait)
+            small = cv2.resize(rot, (YOLO_W, YOLO_H), interpolation=cv2.INTER_LINEAR)
+
+            # run YOLO on small image (device selected)
+            results = model(small, device=DEVICE)
+
+            # We will draw on a copy of the original rot to keep quality (no blur)
+            annotated = rot.copy()
+
+            # scale factors to map small -> rot
+            sx = rot_w / YOLO_W
+            sy = rot_h / YOLO_H
+
+            # detection boxes from results (coordinates in small image space)
             boxes = results[0].boxes
+            if boxes is not None and len(boxes) > 0:
+                # iterate all boxes (or take first) — we'll draw all
+                for b in boxes:
+                    x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
+                    cls = int(b.cls[0])
+                    conf = float(b.conf[0])
 
-            annotated = results[0].plot() if results else undistorted_frame
+                    # map back to rot coords
+                    rx1 = x1 * sx
+                    ry1 = y1 * sy
+                    rx2 = x2 * sx
+                    ry2 = y2 * sy
 
-            h, w = annotated.shape[:2]
-            center_x = w // 2
-            center_y = h // 2
+                    label = model.names[cls] if hasattr(model, "names") else str(cls)
 
-            # INIT
-            detected = False
-            obj_cx = None
-            obj_cy = None
-            in_center = False
-            dist_x_cm = 0
-            dist_y_cm = 0
+                    # draw box and label on high-res annotated
+                    draw_box_and_label(annotated, (rx1, ry1), (rx2, ry2), label_text=label, conf=conf, color=(0,165,255), thickness=2)
 
-            # CEK OBJEK & HITUNG POSISI
-            if len(boxes) > 0:
-                box = boxes[0]
-                x1, y1, x2, y2 = box.xyxy[0]
-                label = model.names[int(box.cls[0])]
-                conf = float(box.conf[0])
+                    # compute center of first/highest conf object for logic (you can choose first only)
+                # choose first box as primary
+                primary = boxes[0]
+                x1, y1, x2, y2 = [float(v) for v in primary.xyxy[0]]
+                cx_small = (x1 + x2) / 2.0
+                cy_small = (y1 + y2) / 2.0
+                # map to rot coords
+                obj_cx = int(cx_small * sx)
+                obj_cy = int(cy_small * sy)
+                # compute stable confidence buffer
+                conf_val = float(primary.conf[0])
+                bufferConf.append(conf_val)
 
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
+                stable_conf = None
+                if len(bufferConf) == bufferConf.maxlen:
+                    stable_conf = sum(bufferConf) / len(bufferConf)
 
-                bufferConf.append(conf)
+                # default values
+                detected = False
+                in_center = False
+                dist_x_cm = 0.0
+                dist_y_cm = 0.0
 
-                if len(bufferConf) == 5:
-                    stable_conf = sum(bufferConf) / 5
-                    if label == "Azqya" and stable_conf > 0.6:
+                if stable_conf is not None and stable_conf > CONF_THRESHOLD:
+                    # choose label
+                    lab = model.names[int(primary.cls[0])]
+                    if lab == "Azqya":   # keep your logic
                         detected = True
-                        obj_cx, obj_cy = cx, cy
-                        
-                        # Hitung offset dari center
+                        # offset (pixels)
+                        center_x = rot_w // 2
+                        center_y = rot_h // 2
                         offset_x = obj_cx - center_x
                         offset_y = obj_cy - center_y
-
-                        # Konversi ke cm
+                        # convert to cm if you have pxlPercm
                         dist_x_cm = offset_x / pxlPercm
                         dist_y_cm = offset_y / pxlPercm
-                        
-                        # CEK apakah objek masuk margin
-                        if (abs(cx - center_x) <= margin and 
-                            abs(cy - center_y) <= margin):
-                            in_center = True
+                        in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
 
-                        # Print ke terminal
-                        print(f"[{label}] Confidence: {stable_conf:.2f} | "
-                              f"Jarak X: {dist_x_cm:.2f} cm | "
-                              f"Jarak Y: {dist_y_cm:.2f} cm | "
-                              f"In Center: {in_center}")
-                        
-                        # ===== KIRIM DATA KE STM32 =====
-                        # Kirim jika objek berada di dalam margin (in_center = True)
-                        if in_center:
-                            if not data_sent:  # Kirim hanya sekali
-                                if ser and ser.is_open:
-                                    try:
-                                        # Format: "X:10.5,Y:5.2\n"
-                                        data_to_send = f"X:{dist_x_cm:.2f},Y:{dist_y_cm:.2f}\n"
-                                        ser.write(data_to_send.encode())
-                                        
-                                        # Print dengan jelas di terminal
-                                        print("\n" + "="*70)
-                                        print("✅ DATA BERHASIL DIKIRIM KE STM32!")
-                                        print(f"   📤 Data: {data_to_send.strip()}")
-                                        print(f"   📍 X = {dist_x_cm:.2f} cm, Y = {dist_y_cm:.2f} cm")
-                                        print("="*70 + "\n")
-                                        
-                                        data_sent = True  # Set flag supaya tidak kirim lagi
-                                    except Exception as e:
-                                        print(f"\n[ERROR] Gagal kirim ke STM32: {e}\n")
-                        else:
-                            # Reset flag jika objek keluar dari margin
-                            if data_sent:
-                                print("\n⚠️  [INFO] Objek keluar dari margin - Siap kirim data lagi\n")
-                                data_sent = False
+                        # send serial once when in center
+                        if in_center and not data_sent and ser:
+                            try:
+                                msg = f"X:{dist_x_cm:.2f},Y:{dist_y_cm:.2f}\n"
+                                ser.write(msg.encode())
+                                data_sent = True
+                            except Exception as e:
+                                print("[WARN] serial send failed:", e)
+                        elif not in_center:
+                            data_sent = False
+            else:
+                # no boxes
+                bufferConf.clear()
+                obj_cx = None
+                obj_cy = None
+                detected = False
+                in_center = False
+                dist_x_cm = dist_y_cm = 0.0
+                center_x = rot_w // 2
+                center_y = rot_h // 2
 
-            # Tentukan warna garis
-            color = (0, 255, 0) if in_center else (0, 0, 255)
+            # draw crosshair & center box (on annotated high-res)
+            center_x = rot_w // 2
+            center_y = rot_h // 2
+            color = (0,255,0) if (locals().get("in_center", False)) else (0,0,255)
+            cv2.line(annotated, (center_x, 0), (center_x, rot_h), color, 2)
+            cv2.line(annotated, (0, center_y), (rot_w, center_y), color, 2)
+            cv2.rectangle(annotated, (center_x - margin, center_y - margin), (center_x + margin, center_y + margin), color, 2)
 
-            # GAMBAR GARIS & INDIKATOR
-            cv2.line(annotated, (center_x, 0), (center_x, h), color, 2)  # Garis vertikal
-            cv2.line(annotated, (0, center_y), (w, center_y), color, 2)  # Garis horizontal
+            # draw center dot and text
+            if 'obj_cx' in locals() and obj_cx is not None:
+                cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 6, (255,255,0), -1)
 
-            cv2.rectangle(  # Kotak margin
-                annotated,
-                (center_x - margin, center_y - margin),
-                (center_x + margin, center_y + margin),
-                color, 2
-            )
+            # write X Y text at bottom
+            txt = f"X: {dist_x_cm:.2f} cm | Y: {dist_y_cm:.2f} cm"
+            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 3, cv2.LINE_AA)
+            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 1, cv2.LINE_AA)
 
-            # Tampilkan jarak X dan Y di frame
-            cv2.putText(
-                annotated,
-                f"X: {dist_x_cm:.2f} cm",
-                (center_x + margin + 10, center_y - 15),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 0, 0),
-                2
-            )
-            cv2.putText(
-                annotated,
-                f"Y: {dist_y_cm:.2f} cm",
-                (center_x + margin + 10, center_y - 39),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 0, 0),
-                2
-            )
-
-            # Gambar titik tengah objek
-            if obj_cx is not None:
-                cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 5, (255, 255, 0), -1)
-
-            # Kirim ke Android via UDP
+            # Encode & broadcast
             ok, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-            if not ok:
-                continue
+            if ok:
+                data = buffer.tobytes()
+                header = f"{len(data):08d}".encode('ascii')
+                try:
+                    sock.sendto(header + data, (BROADCAST_IP, Port))
+                except Exception as e:
+                    # ignore network errors quietly
+                    if DEBUG:
+                        print("[WARN] broadcast failed:", e)
 
-            data = buffer.tobytes()
-            data_size = len(data)
+            # preview for debug (high quality)
+            if DEBUG:
+                cv2.imshow("Annotated (high quality)", annotated)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
-            if data_size <= MAX_PACKET_SIZE:
-                header = f"{data_size:08d}".encode('ascii')
-                packet = header + data
-                sock.sendto(packet, (IP_HP, Port))
-
+    except KeyboardInterrupt:
+        print("[INFO] Terminated by user")
+    except Exception as e:
+        print("[ERROR] exception:", e)
+        traceback.print_exc()
     finally:
         Camera.release()
         sock.close()
-        if ser and ser.is_open:
+        if ser and hasattr(ser, "is_open") and ser.is_open:
             ser.close()
-            print("[OK] Serial port closed")
-
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     UndistortFrame()
