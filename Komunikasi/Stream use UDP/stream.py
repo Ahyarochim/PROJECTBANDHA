@@ -19,11 +19,11 @@ SERIAL_PORT = "COM3"  # Windows: "COM3", "COM4", dll | Linux: "/dev/ttyACM0" ata
 BAUDRATE = 115200
 
 # ===== UDP CONFIG =====
-IP_HP = "10.105.42.54"
+IP_HP = "10.105.129.186"
 Port = 6000
-WIDTH, HEIGHT = 480, 360
-FPS = 15
-JPEG_QUALITY = 50
+WIDTH, HEIGHT = 400, 360
+FPS = 30
+JPEG_QUALITY = 30
 MAX_PACKET_SIZE = 60000  
 
 model = YOLO(model_path)
