@@ -21,7 +21,7 @@ BAUDRATE = 115200
 # ===== UDP CONFIG =====
 IP_HP = "10.105.129.186"
 Port = 6000
-WIDTH, HEIGHT = 400, 360
+WIDTH, HEIGHT = 360, 400
 FPS = 30
 JPEG_QUALITY = 30
 MAX_PACKET_SIZE = 60000  
@@ -112,13 +112,14 @@ def UndistortFrame():
             ret, frame = Camera.read()
             if not ret:
                 continue
-
+            frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
             # UNDISTORT & DETECT
             undistorted_frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
             results = model(undistorted_frame, device='cpu')
             boxes = results[0].boxes
 
             annotated = results[0].plot() if results else undistorted_frame
+
             h, w = annotated.shape[:2]
             center_x = w // 2
             center_y = h // 2
