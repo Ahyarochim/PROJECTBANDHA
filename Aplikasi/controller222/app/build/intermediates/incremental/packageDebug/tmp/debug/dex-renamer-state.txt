@@ -1,9 +1,9 @@
-#Tue Nov 25 22:07:58 WIB 2025
-base.0=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes.dex
-base.1=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex
-base.2=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\7\\classes.dex
-base.3=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\8\\classes.dex
-base.4=C\:\\bandha\\project2 komunikasi\\PROJECTBANDHA\\Aplikasi\\controller222\\app\\build\\intermediates\\dex\\debug\\mergeExtDexDebug\\classes2.dex
+#Tue Nov 25 22:49:34 WIB 2025
+base.0=/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Aplikasi/controller222/app/build/intermediates/dex/debug/mergeExtDexDebug/classes.dex
+base.1=/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Aplikasi/controller222/app/build/intermediates/dex/debug/mergeProjectDexDebug/0/classes.dex
+base.2=/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Aplikasi/controller222/app/build/intermediates/dex/debug/mergeProjectDexDebug/7/classes.dex
+base.3=/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Aplikasi/controller222/app/build/intermediates/dex/debug/mergeProjectDexDebug/8/classes.dex
+base.4=/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Aplikasi/controller222/app/build/intermediates/dex/debug/mergeExtDexDebug/classes2.dex
 path.0=classes.dex
 path.1=0/classes.dex
 path.2=7/classes.dex

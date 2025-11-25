@@ -112,11 +112,11 @@ public class MainActivity extends AppCompatActivity {
             if (isConnected) {
                 if (isManualMode) {
                     // Switching to Manual Mode
-//                    sendModeCommand("MANUAL");
+                    sendModeCommand("MANUAL");
                     Toast.makeText(this, "Switched to Manual Mode", Toast.LENGTH_SHORT).show();
                 } else {
                     // Switching to Autonomous Mode
-//                    sendModeCommand("AUTO");
+                    sendModeCommand("AUTO");
                     Toast.makeText(this, "Switched to Autonomous Mode", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -251,9 +251,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendSliderData() {
         if (socket != null && isConnected && isManualMode) {
-            // Format: abc,value1,value2
-            // FIXED: Hanya 2 values (valA dan valB), bukan 3
-            String msg = String.format("%.2f,%.2f", valA, valB);
+            // Format: SLIDER:gripper1,gripper2
+            String msg = String.format("SLIDER:%.2f,%.2f", valA, valB);
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent slider data: " + msg);
         }
@@ -331,13 +330,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-//    private void sendModeCommand(String mode) {
-//        if (socket != null && isConnected) {
-//            String msg = "MODE:" + mode;
-//            socket.send(msg.getBytes(ZMQ.CHARSET));
-//            Log.d("ZMQ", "Sent mode command: " + msg);
-//        }
-//    }
+    private void sendModeCommand(String mode) {
+        if (socket != null && isConnected) {
+            String msg = "MODE:" + mode;
+            socket.send(msg.getBytes(ZMQ.CHARSET));
+            Log.d("ZMQ", "Sent mode command: " + msg);
+        }
+    }
 
     private String getDirectionText(int direction) {
         switch (direction) {
@@ -433,11 +432,11 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "Connected to server", Toast.LENGTH_SHORT).show();
 
                     // Send initial mode command
-//                    if (isManualMode) {
-//                        sendModeCommand("MANUAL");
-//                    } else {
-//                        sendModeCommand("AUTO");
-//                    }
+                    if (isManualMode) {
+                        sendModeCommand("MANUAL");
+                    } else {
+                        sendModeCommand("AUTO");
+                    }
                 });
             } catch (Exception e) {
                 Log.e("ZMQ", "Connection failed", e);

@@ -4,7 +4,7 @@
             "outputFile": "com.example.controllerzmq.app-mergeDebugResources-42:/values-w360dp-port-v13/values-w360dp-port-v13.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\annonimous\\.gradle\\caches\\8.13\\transforms\\9dc567ecfc00e5c528a9cd0d8de9c121\\transformed\\material-1.12.0\\res\\values-w360dp-port-v13\\values-w360dp-port-v13.xml",
+                    "source": "/home/hasha/.gradle/caches/8.13/transforms/9dc567ecfc00e5c528a9cd0d8de9c121/transformed/material-1.12.0/res/values-w360dp-port-v13/values-w360dp-port-v13.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",

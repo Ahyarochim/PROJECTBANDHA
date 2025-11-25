@@ -10,7 +10,7 @@ class RobotMode(Enum):
     AUTONOMOUS = 2
 
 class ZMQRobotServer:
-    def __init__(self, zmq_port=6000, serial_port='COM3', baud_rate=115200):
+    def __init__(self, zmq_port=6000, serial_port='/dev/ttyACM0', baud_rate=115200):
         """
         Inisialisasi ZMQ Server untuk menerima data dari Android
         dan meneruskan ke STM32
@@ -160,9 +160,10 @@ class ZMQRobotServer:
         
         Format dari Android:
         1. "x,y" - Joystick coordinates
-        2. "abc,value1,value2" - Slider data
+        2. "SLIDER:gripper1,gripper2" - Slider data
         3. "PRESET:1" atau "PRESET:2" - Preset command
         4. "GRIPPER:GRIP_ON" atau "GRIPPER:GRIP_OFF" - Gripper toggle
+        5. "MODE:MANUAL" atau "MODE:AUTO" - Mode switching
         """
         try:
             msg = message.decode('utf-8').strip()
@@ -179,12 +180,18 @@ class ZMQRobotServer:
                 gripper_state = msg.split(":")[1]
                 self.handle_gripper_toggle(gripper_state)
                 
-            elif msg.startswith("abc,"):
-                # Slider data: "abc,value1,value2"
-                parts = msg.split(",")
-                if len(parts) == 3:
-                    gripper1 = float(parts[1])
-                    gripper2 = float(parts[2])
+            elif msg.startswith("MODE:"):
+                # Mode switching: "MODE:MANUAL" or "MODE:AUTO"
+                mode = msg.split(":")[1]
+                self.handle_mode_change(mode)
+                
+            elif msg.startswith("SLIDER:"):
+                # Slider data: "SLIDER:gripper1,gripper2"
+                data_part = msg.split(":", 1)[1]  # Ambil bagian setelah "SLIDER:"
+                parts = data_part.split(",")
+                if len(parts) == 2:
+                    gripper1 = float(parts[0])
+                    gripper2 = float(parts[1])
                     self.handle_slider_data(gripper1, gripper2)
                     
             else:
@@ -246,6 +253,25 @@ class ZMQRobotServer:
         data = {
             'type': 'gripper_toggle',
             'state': 'ON' if self.is_gripping else 'OFF'
+        }
+        self.send_to_stm(data)
+    
+    def handle_mode_change(self, mode):
+        """Handle mode change between MANUAL and AUTO"""
+        if mode == "MANUAL":
+            self.mode = RobotMode.MANUAL
+            print(f"[MODE] Switched to MANUAL mode")
+        elif mode == "AUTO":
+            self.mode = RobotMode.AUTONOMOUS
+            print(f"[MODE] Switched to AUTONOMOUS mode")
+        else:
+            print(f"[MODE] Unknown mode: {mode}")
+            return
+        
+        # Kirim ke STM32
+        data = {
+            'type': 'mode',
+            'mode': mode
         }
         self.send_to_stm(data)
     

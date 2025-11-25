@@ -4,7 +4,7 @@
             "outputFile": "com.example.controllerzmq.app-mergeDebugResources-42:/values-v26/values-v26.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\annonimous\\.gradle\\caches\\8.13\\transforms\\4f28695dc872203b7bcf0894e394a5bf\\transformed\\appcompat-1.7.0\\res\\values-v26\\values-v26.xml",
+                    "source": "/home/hasha/.gradle/caches/8.13/transforms/4f28695dc872203b7bcf0894e394a5bf/transformed/appcompat-1.7.0/res/values-v26/values-v26.xml",
                     "from": {
                         "startLines": "2,3,4,8,12,16",
                         "startColumns": "4,4,4,4,4,4",
