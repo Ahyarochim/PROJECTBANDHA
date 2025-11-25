@@ -123,10 +123,7 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add .">
-      <change beforePath="$PROJECT_DIR$/../../Komunikasi/Stream use UDP/stream.py" beforeDir="false" afterPath="$PROJECT_DIR$/../../Komunikasi/Stream use UDP/stream.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../Vision/Main Code/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/../../Vision/Main Code/main.py" afterDir="false" />
-    </list>
+    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add ." />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -135,7 +132,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[DeviceId(pluginId=LocalEmulator, isTemplate=false, identifier=path=C:\Users\ASUS\.android\avd\Medium_Phone.avd)]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[DeviceId(pluginId=PhysicalDevice, isTemplate=false, identifier=serial=48d917e5)]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -195,7 +192,6 @@
     "RunOnceActivity.cidr.known.project.marker": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "android.gradle.sync.needed": "true",
     "cf.first.check.clang-format": "false",
     "cidr.known.project.marker": "true",
     "git-widget-placeholder": "master",
@@ -364,12 +360,12 @@
       <map>
         <entry key="com.example.controllerzmq">
           <value>
-            <CheckInfo lastCheckTimestamp="1763727877012" />
+            <CheckInfo lastCheckTimestamp="1764076961992" />
           </value>
         </entry>
         <entry key="com.example.controllerzmq.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1763727877009" />
+            <CheckInfo lastCheckTimestamp="1764076962035" />
           </value>
         </entry>
       </map>

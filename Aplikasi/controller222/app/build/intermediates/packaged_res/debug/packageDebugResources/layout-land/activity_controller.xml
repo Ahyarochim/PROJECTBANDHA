@@ -8,47 +8,27 @@
 
     <!-- Video Stream -->
 
-    <ImageView
-        android:id="@+id/videoStream"
-        android:layout_width="300dp"
-        android:layout_height="220dp"
-        android:background="#000"
-        android:scaleType="centerCrop"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
     <!-- Rotate Left Button -->
 
     <!-- Rotate Right Button -->
 
     <!-- Connect Button -->
-    <ImageButton
-        android:id="@+id/btnRotateLeft"
-        android:layout_width="70dp"
-        android:layout_height="70dp"
-        android:layout_marginTop="40dp"
-        android:contentDescription="Rotate Left"
-        app:layout_constraintBottom_toTopOf="@+id/joystick"
-        app:layout_constraintEnd_toStartOf="@+id/btnRotateRight"
-        app:layout_constraintHorizontal_bias="0.275"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.114"
-        app:srcCompat="@drawable/rotateleft" />
 
-    <ImageButton
-        android:id="@+id/btnRotateRight"
-        android:layout_width="70dp"
-        android:layout_height="70dp"
-        android:contentDescription="Rotate Right"
-        app:layout_constraintBottom_toTopOf="@+id/joystick"
-        app:layout_constraintEnd_toStartOf="@+id/videoStream"
-        app:layout_constraintHorizontal_bias="0.821"
+    <ImageView
+        android:id="@+id/videoStream"
+        android:layout_width="480px"
+        android:layout_height="800px"
+        android:layout_marginBottom="68dp"
+        android:adjustViewBounds="true"
+        android:background="#000"
+        android:scaleType="fitCenter"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintDimensionRatio="800:720"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.498"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.586"
-        app:srcCompat="@drawable/rotateright" />
+        app:layout_constraintVertical_bias="0.087" />
 
     <!-- Mode Switch -->
 
@@ -56,6 +36,34 @@
     <!-- gripper-->
 
     <!-- Joystick -->
+
+    <ImageButton
+        android:id="@+id/btnRotateLeft"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
+        android:layout_marginTop="40dp"
+        android:contentDescription="Rotate Left"
+        app:layout_constraintBottom_toTopOf="@+id/joystick"
+        app:layout_constraintEnd_toStartOf="@+id/videoStream"
+        app:layout_constraintHorizontal_bias="0.182"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.066"
+        app:srcCompat="@drawable/rotateleft" />
+
+    <ImageButton
+        android:id="@+id/btnRotateRight"
+        android:layout_width="70dp"
+        android:layout_height="70dp"
+        android:layout_marginTop="40dp"
+        android:layout_marginBottom="40dp"
+        android:contentDescription="Rotate Right"
+        app:layout_constraintBottom_toTopOf="@+id/joystick"
+        app:layout_constraintEnd_toStartOf="@+id/videoStream"
+        app:layout_constraintHorizontal_bias="0.862"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/rotateright" />
 
     <Button
         android:id="@+id/btnGripper"
@@ -78,9 +86,10 @@
         android:textColor="@color/black"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.95"
         app:layout_constraintStart_toEndOf="@+id/preset1"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.044" />
+        app:layout_constraintVertical_bias="0.038" />
 
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/modeSwitch"
@@ -113,9 +122,10 @@
         android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.128"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/videoStream"
-        app:layout_constraintVertical_bias="0.0" />
+        app:layout_constraintTop_toBottomOf="@+id/joystick"
+        app:layout_constraintVertical_bias="0.238" />
 
     <TextView
         android:id="@+id/valJoy"
@@ -129,8 +139,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/modeStatusText"
-        app:layout_constraintVertical_bias="0.959" />
+        app:layout_constraintTop_toBottomOf="@+id/videoStream" />
 
     <com.example.controllerzmq.JoystickView
         android:id="@+id/joystick"
@@ -169,7 +178,7 @@
         android:minHeight="48dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintHorizontal_bias="0.995"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/btnConnect"
         app:layout_constraintVertical_bias="0.0"
@@ -199,7 +208,7 @@
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.713" />
+        app:layout_constraintVertical_bias="0.785" />
 
     <TextView
         android:id="@+id/tvGripper1Value"
@@ -216,6 +225,9 @@
         app:layout_constraintVertical_bias="1.0" />
 
     <!-- Tambahkan setelah slider gripper2 -->
+
+    <!-- Tambahkan setelah slider gripper3 -->
+
     <TextView
         android:id="@+id/tvGripper2Value"
         android:layout_width="wrap_content"
@@ -226,10 +238,9 @@
         android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@+id/gripper2"
         app:layout_constraintEnd_toEndOf="@+id/gripper2"
+        app:layout_constraintHorizontal_bias="0.518"
         app:layout_constraintStart_toStartOf="@+id/gripper2"
-        app:layout_constraintVertical_bias="1.0" />
-
-    <!-- Tambahkan setelah slider gripper3 -->
+        app:layout_constraintTop_toBottomOf="@+id/gripper" />
 
     <Button
         android:id="@+id/preset1"
