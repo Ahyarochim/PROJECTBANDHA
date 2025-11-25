@@ -251,8 +251,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendSliderData() {
         if (socket != null && isConnected && isManualMode) {
-            // Format: abc,value1,value2,value3
-            String msg = String.format("abc,%.2f,%.2f,%.2f", valA, valB);
+            // Format: abc,value1,value2
+            // FIXED: Hanya 2 values (valA dan valB), bukan 3
+            String msg = String.format("%.2f,%.2f", valA, valB);
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent slider data: " + msg);
         }
@@ -492,6 +493,4 @@ public class MainActivity extends AppCompatActivity {
         disconnectFromServer();
         resetCoordinates();
         resetSliders();
-        if (receiver != null) receiver.stopReceiver();
-    }
-}
+        if (receiver != null) receiver.stopReceiver();}}
