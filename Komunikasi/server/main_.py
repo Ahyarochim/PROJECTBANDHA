@@ -130,7 +130,7 @@ def zmq_server(ser):
 
     ctx = zmq.Context()
     sock = ctx.socket(zmq.PULL)
-    bind_addr = f"tcp://10.106.19.63:{ZMQ_PORT}"
+    bind_addr = f"tcp://0.0.0.0:{ZMQ_PORT}"
     sock.bind(bind_addr)
     sock.setsockopt(zmq.RCVTIMEO, 1000)
 
