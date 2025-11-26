@@ -9,6 +9,8 @@ import time
 import serial
 import sys
 import traceback
+import threading
+import queue
 
 # -------------------------
 # CONFIG (sesuaikan jika perlu)
@@ -23,15 +25,25 @@ BROADCAST_IP = "255.255.255.255"
 Port = 6000
 
 # Kamera request (hint)
-REQ_W, REQ_H = 360, 400   # hint ke driver (landscape before rotate)
-FPS = 20
+REQ_W, REQ_H = 360, 400   
 
-# ukuran kecil yang dipakai YOLO (portrait orientation)
-# gunakan ukuran cukup besar untuk kualitas, tetapi masih ringan
-YOLO_W, YOLO_H = 480, 640  # small image for speed (portrait: width x height)
+YOLO_W, YOLO_H = 480, 640  
 
 # JPEG quality untuk broadcast
-JPEG_QUALITY = 90
+JPEG_QUALITY = 50          # preview / local quality (high quality for local preview)
+JPEG_QUALITY_SEND = 30   # network stream quality (balance: kualitas vs bandwidth)
+
+# worker/send tuning
+SEND_EVERY_N_FRAMES = 2        # how often to enqueue a frame for sending (1 = every frame)
+SENDER_QUEUE_MAX = 2           # small queue for frames to send (drop when full)
+YOLO_EVERY_N_FRAMES = 2        # run YOLO every N frames (main thread enqueues)
+YOLO_CONF_THRESHOLD = 0.35
+SENDER_THREAD_JOIN_TIMEOUT = 1.0
+SHOW_PREVIEW = True            # set False on device to reduce overhead
+SHOW_EVERY_N_FRAMES = 2        # preview refresh throttle
+
+# ===== METRICS/LOGGING =====
+FPS_LOG_INTERVAL = 5.0  # log stats every 5 seconds
 
 # center / detection params
 margin = 100
@@ -134,8 +146,87 @@ def UndistortFrame():
             print("[WARN] Undistort requested but calibration missing. Skipping undistort.")
         USE_UNDISTORT = False
 
-    data_sent = False
+    # ---- workers setup ----
+    # YOLO worker: process only latest small frame (queue size=1)
+    yolo_in_q = queue.Queue(maxsize=1)
+    worker_stop = threading.Event()
+    cached_results = None
+    cached_boxes = None
 
+    def yolo_worker():
+        nonlocal cached_results, cached_boxes
+        while not worker_stop.is_set():
+            try:
+                small = yolo_in_q.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                res = model(small, device=DEVICE, conf=YOLO_CONF_THRESHOLD, verbose=False)
+                cached_results = res
+                cached_boxes = res[0].boxes if res and len(res) > 0 else None
+            except Exception as e:
+                if DEBUG:
+                    print("[WARN] YOLO worker error:", e)
+            finally:
+                try:
+                    yolo_in_q.task_done()
+                except Exception:
+                    pass
+
+    yw_thread = threading.Thread(target=yolo_worker, daemon=True)
+    yw_thread.start()
+
+    # Sender worker: encode & send off main thread
+    sender_q = queue.Queue(maxsize=SENDER_QUEUE_MAX)
+    sender_stop = threading.Event()
+    sent_counter = 0
+    dropped_send_counter = 0
+
+    def sender_worker():
+        nonlocal sent_counter, dropped_send_counter
+        while not sender_stop.is_set():
+            try:
+                frame_to_send = sender_q.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                ok, buf = cv2.imencode('.jpg', frame_to_send, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY_SEND])
+                if not ok:
+                    if DEBUG:
+                        print("[WARN] encode failed in sender")
+                    continue
+                data = buf.tobytes()
+                header = f"{len(data):08d}".encode('ascii')
+                try:
+                    # track data size for diagnostics
+                    nonlocal last_sent_size
+                    last_sent_size = len(data)
+                    sock.sendto(header + data, (BROADCAST_IP, Port))
+                    sent_counter += 1
+                except Exception as e:
+                    # log every error (not just every 100) to catch issues
+                    if DEBUG:
+                        print("[WARN] broadcast failed:", e)
+            except Exception as e:
+                if DEBUG:
+                    print("[WARN] sender_worker exception:", e)
+            finally:
+                try:
+                    sender_q.task_done()
+                except Exception:
+                    pass
+
+    s_thread = threading.Thread(target=sender_worker, daemon=True)
+    s_thread.start()
+
+    data_sent = False
+    frame_counter = 0
+    yolo_counter = 0
+    fps_start_time = time.time()
+    fps_frame_count = 0
+    last_log_time = time.time()
+    last_sent_size = 0
+    
     try:
         while True:
             ret, frame = Camera.read()
@@ -152,12 +243,21 @@ def UndistortFrame():
             # original rot size (keep for annotation quality)
             rot_h, rot_w = rot.shape[:2]
 
-            # prepare small image for YOLO (keep portrait orientation)
-            # maintain aspect: we resize to YOLO_W x YOLO_H (portrait)
-            small = cv2.resize(rot, (YOLO_W, YOLO_H), interpolation=cv2.INTER_LINEAR)
+            # YOLO: enqueue small image to worker (non-blocking) every YOLO_EVERY_N_FRAMES
+            yolo_counter += 1
+            should_run_yolo = (yolo_counter % YOLO_EVERY_N_FRAMES == 0)
+            small = None
+            if should_run_yolo:
+                small = cv2.resize(rot, (YOLO_W, YOLO_H), interpolation=cv2.INTER_LINEAR)
+                try:
+                    yolo_in_q.put_nowait(small)
+                except queue.Full:
+                    # worker busy: reuse cached results for this frame
+                    if DEBUG:
+                        pass
 
-            # run YOLO on small image (device selected)
-            results = model(small, device=DEVICE)
+            # results will be read from cached_results / cached_boxes (updated by worker)
+            results = cached_results
 
             # We will draw on a copy of the original rot to keep quality (no blur)
             annotated = rot.copy()
@@ -167,7 +267,20 @@ def UndistortFrame():
             sy = rot_h / YOLO_H
 
             # detection boxes from results (coordinates in small image space)
-            boxes = results[0].boxes
+            # Guard against cached_results being None or empty
+            boxes = None
+            if results:
+                try:
+                    if len(results) > 0 and hasattr(results[0], "boxes"):
+                        boxes = results[0].boxes
+                except Exception as e:
+                    if DEBUG:
+                        print("[WARN] reading cached_results failed:", e)
+
+            # fallback to last known boxes from worker (if any)
+            if boxes is None and cached_boxes is not None:
+                boxes = cached_boxes
+
             if boxes is not None and len(boxes) > 0:
                 # iterate all boxes (or take first) — we'll draw all
                 for b in boxes:
@@ -262,23 +375,47 @@ def UndistortFrame():
             cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 3, cv2.LINE_AA)
             cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 1, cv2.LINE_AA)
 
-            # Encode & broadcast
-            ok, buffer = cv2.imencode('.jpg', annotated, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-            if ok:
-                data = buffer.tobytes()
-                header = f"{len(data):08d}".encode('ascii')
+            # Send frame: enqueue a smaller display frame to sender worker (non-blocking)
+            frame_counter += 1
+            should_send = (frame_counter % SEND_EVERY_N_FRAMES == 0)
+            if should_send:
+                display_frame = cv2.resize(annotated, (int(rot_w*0.5), int(rot_h*0.5)), interpolation=cv2.INTER_LINEAR)
                 try:
-                    sock.sendto(header + data, (BROADCAST_IP, Port))
-                except Exception as e:
-                    # ignore network errors quietly
-                    if DEBUG:
-                        print("[WARN] broadcast failed:", e)
-
-            # preview for debug (high quality)
-            if DEBUG:
-                cv2.imshow("Annotated (high quality)", annotated)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                    sender_q.put_nowait(display_frame)
+                except queue.Full:
+                    dropped_send_counter += 1
+                    if DEBUG and dropped_send_counter % 50 == 0:
+                        print(f"[INFO] sender_q full, dropped frames: {dropped_send_counter}")
+            # ===== METRICS LOGGING =====
+            fps_frame_count += 1
+            now = time.time()
+            if now - last_log_time >= FPS_LOG_INTERVAL:
+                elapsed = now - last_log_time
+                current_fps = fps_frame_count / elapsed
+                sender_q_size = sender_q.qsize()
+                yolo_q_size = yolo_in_q.qsize()
+                
+                print(f"[METRICS] "
+                      f"FPS={current_fps:.1f} | "
+                      f"sent={sent_counter} | "
+                      f"dropped={dropped_send_counter} | "
+                      f"sender_q={sender_q_size} | "
+                      f"yolo_q={yolo_q_size} | "
+                      f"last_data_size={last_sent_size} bytes")
+                
+                fps_frame_count = 0
+                last_log_time = now
+                
+                # warn if queue is filling up (sign of bottleneck)
+                if sender_q_size == SENDER_QUEUE_MAX:
+                    print("[WARN] sender_q at MAX capacity (bottleneck detected)")
+                if yolo_q_size == yolo_in_q.maxsize:
+                    print("[WARN] yolo_q at MAX capacity")
+             # preview for debug (high quality) - throttle to reduce UI overhead
+            if DEBUG and SHOW_PREVIEW and (frame_counter % SHOW_EVERY_N_FRAMES == 0):
+                 cv2.imshow("Annotated (high quality)", annotated)
+                 if cv2.waitKey(1) & 0xFF == ord('q'):
+                     break
 
     except KeyboardInterrupt:
         print("[INFO] Terminated by user")
@@ -286,11 +423,30 @@ def UndistortFrame():
         print("[ERROR] exception:", e)
         traceback.print_exc()
     finally:
+        # stop workers and join cleanly
+        worker_stop.set()
+        sender_stop.set()
+        try:
+            yw_thread.join(timeout=1.0)
+        except Exception:
+            pass
+        try:
+            s_thread.join(timeout=SENDER_THREAD_JOIN_TIMEOUT)
+        except Exception:
+            pass
+        # best-effort drain sender queue
+        try:
+            while not sender_q.empty():
+                time.sleep(0.01)
+        except Exception:
+            pass
         Camera.release()
         sock.close()
         if ser and hasattr(ser, "is_open") and ser.is_open:
             ser.close()
         cv2.destroyAllWindows()
+        if DEBUG:
+            print(f"[INFO] sent={sent_counter}, dropped_send={dropped_send_counter}")
 
 if __name__ == "__main__":
     UndistortFrame()
