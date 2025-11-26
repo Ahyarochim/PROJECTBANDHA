@@ -25,16 +25,13 @@ BROADCAST_IP = "255.255.255.255"
 Port = 6000
 
 # Kamera request (hint)
-REQ_W, REQ_H = 360, 400   # hint ke driver (landscape before rotate)
-FPS = 20
+REQ_W, REQ_H = 360, 400   
 
-# ukuran kecil yang dipakai YOLO (portrait orientation)
-# gunakan ukuran cukup besar untuk kualitas, tetapi masih ringan
-YOLO_W, YOLO_H = 480, 640  # small image for speed (portrait: width x height)
+YOLO_W, YOLO_H = 480, 640  
 
 # JPEG quality untuk broadcast
-JPEG_QUALITY = 90          # preview / local quality (high quality for local preview)
-JPEG_QUALITY_SEND = 55     # network stream quality (balance: kualitas vs bandwidth)
+JPEG_QUALITY = 50          # preview / local quality (high quality for local preview)
+JPEG_QUALITY_SEND = 30   # network stream quality (balance: kualitas vs bandwidth)
 
 # worker/send tuning
 SEND_EVERY_N_FRAMES = 2        # how often to enqueue a frame for sending (1 = every frame)
@@ -44,6 +41,9 @@ YOLO_CONF_THRESHOLD = 0.35
 SENDER_THREAD_JOIN_TIMEOUT = 1.0
 SHOW_PREVIEW = True            # set False on device to reduce overhead
 SHOW_EVERY_N_FRAMES = 2        # preview refresh throttle
+
+# ===== METRICS/LOGGING =====
+FPS_LOG_INTERVAL = 5.0  # log stats every 5 seconds
 
 # center / detection params
 margin = 100
@@ -198,10 +198,14 @@ def UndistortFrame():
                 data = buf.tobytes()
                 header = f"{len(data):08d}".encode('ascii')
                 try:
+                    # track data size for diagnostics
+                    nonlocal last_sent_size
+                    last_sent_size = len(data)
                     sock.sendto(header + data, (BROADCAST_IP, Port))
                     sent_counter += 1
                 except Exception as e:
-                    if DEBUG and sent_counter % 100 == 0:
+                    # log every error (not just every 100) to catch issues
+                    if DEBUG:
                         print("[WARN] broadcast failed:", e)
             except Exception as e:
                 if DEBUG:
@@ -218,6 +222,11 @@ def UndistortFrame():
     data_sent = False
     frame_counter = 0
     yolo_counter = 0
+    fps_start_time = time.time()
+    fps_frame_count = 0
+    last_log_time = time.time()
+    last_sent_size = 0
+    
     try:
         while True:
             ret, frame = Camera.read()
@@ -377,12 +386,36 @@ def UndistortFrame():
                     dropped_send_counter += 1
                     if DEBUG and dropped_send_counter % 50 == 0:
                         print(f"[INFO] sender_q full, dropped frames: {dropped_send_counter}")
-
-            # preview for debug (high quality) - throttle to reduce UI overhead
+            # ===== METRICS LOGGING =====
+            fps_frame_count += 1
+            now = time.time()
+            if now - last_log_time >= FPS_LOG_INTERVAL:
+                elapsed = now - last_log_time
+                current_fps = fps_frame_count / elapsed
+                sender_q_size = sender_q.qsize()
+                yolo_q_size = yolo_in_q.qsize()
+                
+                print(f"[METRICS] "
+                      f"FPS={current_fps:.1f} | "
+                      f"sent={sent_counter} | "
+                      f"dropped={dropped_send_counter} | "
+                      f"sender_q={sender_q_size} | "
+                      f"yolo_q={yolo_q_size} | "
+                      f"last_data_size={last_sent_size} bytes")
+                
+                fps_frame_count = 0
+                last_log_time = now
+                
+                # warn if queue is filling up (sign of bottleneck)
+                if sender_q_size == SENDER_QUEUE_MAX:
+                    print("[WARN] sender_q at MAX capacity (bottleneck detected)")
+                if yolo_q_size == yolo_in_q.maxsize:
+                    print("[WARN] yolo_q at MAX capacity")
+             # preview for debug (high quality) - throttle to reduce UI overhead
             if DEBUG and SHOW_PREVIEW and (frame_counter % SHOW_EVERY_N_FRAMES == 0):
-                cv2.imshow("Annotated (high quality)", annotated)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
+                 cv2.imshow("Annotated (high quality)", annotated)
+                 if cv2.waitKey(1) & 0xFF == ord('q'):
+                     break
 
     except KeyboardInterrupt:
         print("[INFO] Terminated by user")
