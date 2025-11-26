@@ -1,6 +1,7 @@
 package com.example.controllerzmq;
 
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -26,6 +27,8 @@ import org.zeromq.SocketType;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 public class MainActivity extends AppCompatActivity {
 
     private UDPReceiver receiver;
@@ -42,19 +45,50 @@ public class MainActivity extends AppCompatActivity {
 
     private float valX = 0f, valY = 0f, valRotation = 0f, valA = 0f, valB = 0f;
 
+    // Frame management dengan AtomicReference - HANYA SIMPAN FRAME TERBARU
+    private AtomicReference<Bitmap> latestFrame = new AtomicReference<>(null);
+    private int frameReceived = 0;
+    private int frameDropped = 0;
+
     private Handler handler = new Handler(Looper.getMainLooper());
 
     private ZContext context;
-    private ZMQ.Socket socket; // Socket PUSH untuk kirim joystick data
+    private ZMQ.Socket socket;
 
     private boolean isConnected = false;
-    private boolean isManualMode = true; // Default: Manual Mode
-    private boolean isGripping = false; // Status gripper
+    private boolean isManualMode = true;
+    private boolean isGripping = false;
+    private boolean isReceiverRunning = false;
 
     private String serverIp = "10.107.137.167";
-    private int serverPort = 6000; // Port untuk kirim joystick data
+    private int serverPort = 6000;
 
     private SharedPreferences prefs;
+
+    // Runnable untuk update UI dengan frame rate tetap
+    private final Runnable uiUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // Ambil frame terbaru dan set ke null (konsumsi frame)
+            Bitmap frame = latestFrame.getAndSet(null);
+
+            if (frame != null) {
+                // Tampilkan frame terbaru
+                videoStream.setImageBitmap(frame);
+                frameReceived++;
+
+                // Log setiap 100 frame untuk monitoring
+                if (frameReceived % 100 == 0) {
+                    Log.d("UDP_FRAME", "Received: " + frameReceived + " | Dropped: " + frameDropped);
+                }
+            }
+
+            // Schedule update berikutnya jika receiver masih berjalan
+            if (isReceiverRunning) {
+                handler.postDelayed(this, 33); // ~30 FPS (untuk video smooth)
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,12 +97,28 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_controller);
 
         videoStream = findViewById(R.id.videoStream);
+        videoStream.setScaleType(ImageView.ScaleType.FIT_CENTER);
 
-        // MULAI RECEIVER
-        receiver = new UDPReceiver(6000, bmp -> runOnUiThread(() -> {
-            videoStream.setImageBitmap(bmp);
-        }));
+        // MULAI RECEIVER dengan callback optimized
+        receiver = new UDPReceiver(6000, bmp -> {
+            // Simpan frame baru, frame lama otomatis tertimpa (DROPPED)
+            Bitmap oldFrame = latestFrame.getAndSet(bmp);
+
+            // Jika ada frame lama yang belum ditampilkan, berarti di-drop
+            if (oldFrame != null) {
+                frameDropped++;
+                // Recycle frame lama untuk hemat memory
+                if (!oldFrame.isRecycled()) {
+                    oldFrame.recycle();
+                }
+            }
+        });
+
         receiver.start();
+        isReceiverRunning = true;
+
+        // Mulai UI update loop
+        handler.post(uiUpdateRunnable);
 
         setupSystemInsets();
 
@@ -93,45 +143,36 @@ public class MainActivity extends AppCompatActivity {
         tvGripper1Value = findViewById(R.id.tvGripper1Value);
         tvGripper2Value = findViewById(R.id.tvGripper2Value);
 
-        // Inisialisasi preset buttons
         preset1 = findViewById(R.id.preset1);
         preset2 = findViewById(R.id.preset2);
-
-        // Inisialisasi gripper button
         btnGripper = findViewById(R.id.btnGripper);
 
         setupSliderListeners();
         setupPresetButtons();
         setupGripperButton();
 
-        // Setup mode switch listener
         modeSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isManualMode = isChecked;
             updateModeDisplay();
 
             if (isConnected) {
                 if (isManualMode) {
-                    // Switching to Manual Mode
                     sendModeCommand("MANUAL");
                     Toast.makeText(this, "Switched to Manual Mode", Toast.LENGTH_SHORT).show();
                 } else {
-                    // Switching to Autonomous Mode
                     sendModeCommand("AUTO");
                     Toast.makeText(this, "Switched to Autonomous Mode", Toast.LENGTH_SHORT).show();
                 }
             }
         });
 
-        // connect/disconnect button
         btnConnect.setOnClickListener(v -> {
             if (!isConnected) connectToServer();
             else disconnectFromServer();
         });
 
-        // settings button
         btnSetting.setOnClickListener(v -> showIpPortDialog());
 
-        // Setup joystick listener
         joystick.setJoystickListener(new JoystickView.JoystickListener() {
             @Override
             public void onJoystickMoved(float xPercent, float yPercent, int direction) {
@@ -140,7 +181,6 @@ public class MainActivity extends AppCompatActivity {
 
                 updateCoordinateDisplay();
 
-                // Only send coordinates in Manual Mode
                 if (isConnected && isManualMode) {
                     sendCoordinate(valX, valY);
                 }
@@ -151,7 +191,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Initial mode display
         updateModeDisplay();
     }
 
@@ -173,13 +212,11 @@ public class MainActivity extends AppCompatActivity {
         isGripping = !isGripping;
 
         if (isGripping) {
-            // Status gripping aktif
             btnGripper.setText("GRIPPING");
             btnGripper.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
             sendGripperCommand("GRIP_ON");
             Toast.makeText(this, "Gripper Activated", Toast.LENGTH_SHORT).show();
         } else {
-            // Status gripping nonaktif
             btnGripper.setText("GRIPPER");
             btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
             sendGripperCommand("GRIP_OFF");
@@ -196,7 +233,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupPresetButtons() {
-        // Preset 1 button - mengirim "1" ke ZMQ
         preset1.setOnClickListener(v -> {
             if (isConnected) {
                 sendPresetCommand(1);
@@ -206,7 +242,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Preset 2 button - mengirim "2" ke ZMQ
         preset2.setOnClickListener(v -> {
             if (isConnected) {
                 sendPresetCommand(2);
@@ -219,7 +254,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendPresetCommand(int presetNumber) {
         if (socket != null && isConnected) {
-            // Kirim format: "PRESET:1" atau "PRESET:2"
             String msg = "PRESET:" + presetNumber;
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent preset command: " + msg);
@@ -227,18 +261,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupSliderListeners() {
-        // Gripper 1 listener
         gripper1.addOnChangeListener((slider, value, fromUser) -> {
             valA = value;
             tvGripper1Value.setText(String.format("Gripper 1: %.2f", valA));
 
-            // Send slider data if connected and in manual mode
             if (isConnected && isManualMode) {
                 sendSliderData();
             }
         });
 
-        // Gripper 2 listener
         gripper2.addOnChangeListener((slider, value, fromUser) -> {
             valB = value;
             tvGripper2Value.setText(String.format("Gripper 2: %.2f", valB));
@@ -251,7 +282,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendSliderData() {
         if (socket != null && isConnected && isManualMode) {
-            // Format: SLIDER:gripper1,gripper2
             String msg = String.format("SLIDER:%.2f,%.2f", valA, valB);
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent slider data: " + msg);
@@ -268,7 +298,6 @@ public class MainActivity extends AppCompatActivity {
         tvGripper1Value.setText("Gripper 1: 0.00");
         tvGripper2Value.setText("Gripper 2: 0.00");
 
-        // Reset button gripper
         isGripping = false;
         if (btnGripper != null) {
             btnGripper.setText("GRIPPER");
@@ -287,17 +316,14 @@ public class MainActivity extends AppCompatActivity {
             modeStatusText.setTextColor(getResources().getColor(android.R.color.holo_blue_dark));
             modeSwitch.setText("Manual");
 
-            // Enable sliders in manual mode
             gripper1.setEnabled(true);
             gripper2.setEnabled(true);
             gripper1.setAlpha(1.0f);
             gripper2.setAlpha(1.0f);
 
-            // Enable joystick in manual mode
             joystick.setEnabled(true);
             joystick.setAlpha(1.0f);
 
-            // Enable gripper button in manual mode
             btnGripper.setEnabled(true);
             btnGripper.setAlpha(1.0f);
 
@@ -307,21 +333,17 @@ public class MainActivity extends AppCompatActivity {
             modeStatusText.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
             modeSwitch.setText("Autonomous");
 
-            // Disable sliders in autonomous mode
             gripper1.setEnabled(false);
             gripper2.setEnabled(false);
             gripper1.setAlpha(0.5f);
             gripper2.setAlpha(0.5f);
 
-            // Disable joystick in autonomous mode
             joystick.setEnabled(false);
             joystick.setAlpha(0.5f);
 
-            // Disable gripper button in autonomous mode
             btnGripper.setEnabled(false);
             btnGripper.setAlpha(0.5f);
 
-            // Reset gripper state when switching to autonomous
             if (isGripping) {
                 isGripping = false;
                 btnGripper.setText("GRIPPER");
@@ -402,7 +424,6 @@ public class MainActivity extends AppCompatActivity {
                     serverIp = ip;
                     serverPort = port;
 
-                    // Save preferences
                     prefs.edit()
                             .putString("IP", serverIp)
                             .putInt("PORT", serverPort)
@@ -431,7 +452,6 @@ public class MainActivity extends AppCompatActivity {
                     btnConnect.setText("DISCONNECT");
                     Toast.makeText(this, "Connected to server", Toast.LENGTH_SHORT).show();
 
-                    // Send initial mode command
                     if (isManualMode) {
                         sendModeCommand("MANUAL");
                     } else {
@@ -448,7 +468,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendCoordinate(float x, float y) {
-        // Only send if connected AND in manual mode
         if (socket != null && isConnected && isManualMode) {
             String msg = x + "," + y;
             socket.send(msg.getBytes(ZMQ.CHARSET));
@@ -462,7 +481,6 @@ public class MainActivity extends AppCompatActivity {
                 resetCoordinates();
                 resetSliders();
 
-                // Close joystick socket
                 if (socket != null) {
                     socket.close();
                     socket = null;
@@ -489,7 +507,27 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        // Stop UI update loop
+        isReceiverRunning = false;
+        handler.removeCallbacks(uiUpdateRunnable);
+
         disconnectFromServer();
         resetCoordinates();
         resetSliders();
-        if (receiver != null) receiver.stopReceiver();}}
+
+        if (receiver != null) {
+            receiver.stopReceiver();
+        }
+
+        // Cleanup frame terbaru
+        Bitmap lastFrame = latestFrame.getAndSet(null);
+        if (lastFrame != null && !lastFrame.isRecycled()) {
+            lastFrame.recycle();
+        }
+
+        videoStream.setImageBitmap(null);
+
+        Log.d("UDP_FRAME", "Final stats - Received: " + frameReceived + " | Dropped: " + frameDropped);
+    }
+}

@@ -4,7 +4,7 @@
             "outputFile": "com.example.controllerzmq.app-mergeDebugResources-42:/values-sw600dp-v13/values-sw600dp-v13.xml",
             "map": [
                 {
-                    "source": "/home/hasha/.gradle/caches/8.13/transforms/9dc567ecfc00e5c528a9cd0d8de9c121/transformed/material-1.12.0/res/values-sw600dp-v13/values-sw600dp-v13.xml",
+                    "source": "C:\\Users\\annonimous\\.gradle\\caches\\8.13\\transforms\\9dc567ecfc00e5c528a9cd0d8de9c121\\transformed\\material-1.12.0\\res\\values-sw600dp-v13\\values-sw600dp-v13.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,10,11,12,13,14",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4",
@@ -23,7 +23,7 @@
                     }
                 },
                 {
-                    "source": "/home/hasha/.gradle/caches/8.13/transforms/4f28695dc872203b7bcf0894e394a5bf/transformed/appcompat-1.7.0/res/values-sw600dp-v13/values-sw600dp-v13.xml",
+                    "source": "C:\\Users\\annonimous\\.gradle\\caches\\8.13\\transforms\\4f28695dc872203b7bcf0894e394a5bf\\transformed\\appcompat-1.7.0\\res\\values-sw600dp-v13\\values-sw600dp-v13.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",
