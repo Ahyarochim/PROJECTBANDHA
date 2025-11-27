@@ -10,7 +10,7 @@ class RobotMode(Enum):
     AUTONOMOUS = 2
 
 class ZMQRobotServer:
-    def __init__(self, zmq_port=6000, serial_port='/dev/ttyACM0', baud_rate=115200):
+    def __init__(self, zmq_port=5555, serial_port='/dev/ttyACM0', baud_rate=115200):
         """
         Inisialisasi ZMQ Server untuk menerima data dari Android
         dan meneruskan ke STM32
@@ -27,7 +27,7 @@ class ZMQRobotServer:
         # ZMQ Setup
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind(f"tcp://*:{zmq_port}")
+        self.socket.bind(f"tcp://20.20.20.26:{zmq_port}")
         
         # Serial Setup untuk STM32
         self.ser = None
@@ -35,11 +35,17 @@ class ZMQRobotServer:
         
         # Robot State
         self.mode = RobotMode.MANUAL
+        self.motor1_value = 0.0
+
+        # Command data
+        self.last_command_type = None
         self.joystick_x = 0.0
         self.joystick_y = 0.0
-        self.gripper1_value = 0.0
-        self.gripper2_value = 0.0
-        self.is_gripping = False
+        self.gripper1 = 0.0
+        self.gripper2 = 0.0
+        self.preset_num = 0
+        self.gripper_state = "OFF"
+        self.mode_value = "MANUAL"
         
         # Threading
         self.running = False
@@ -53,14 +59,20 @@ class ZMQRobotServer:
             self.ser = serial.Serial(
                 port=self.serial_port,
                 baudrate=self.baud_rate,
-                timeout=1,
+                timeout=0.1,
+                write_timeout=2,
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE
+                stopbits=serial.STOPBITS_ONE,
+                xonxoff=False,
+                rtscts=False,
+                dsrdtr=False
             )
+            time.sleep(2)  # Tunggu STM32 ready
+            self.ser.reset_input_buffer()
+            self.ser.reset_output_buffer()
             self.serial_connected = True
             print(f"[SERIAL] Connected to STM32 on {self.serial_port}")
-            time.sleep(2)  # Tunggu STM32 ready
             return True
         except serial.SerialException as e:
             print(f"[SERIAL] Error: {e}")
@@ -74,27 +86,31 @@ class ZMQRobotServer:
             self.serial_connected = False
             print("[SERIAL] Disconnected")
     
-    def send_to_stm(self, data):
-        """
-        Kirim data ke STM32 via Serial
-        
-        Format Protocol:
-        - Start Byte: 0xFF
-        - Command Type: 1 byte
-        - Data Length: 1 byte
-        - Data: variable bytes
-        - Checksum: 1 byte
-        - End Byte: 0xFE
-        """
+    def send_to_stm(self):
+        """Kirim data ke STM32 dalam format yang sesuai tipe command"""
         if not self.serial_connected or not self.ser:
             print("[SERIAL] Not connected to STM32")
             return False
-        
+
         try:
-            # Buat packet dengan protokol
-            packet = self.create_packet(data)
-            self.ser.write(packet)
-            print(f"[SERIAL] Sent to STM32: {packet.hex()}")
+            # Format berdasarkan tipe command terakhir yang diterima
+            if self.last_command_type == 'joystick':
+                data_str = f"JOY,{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
+            elif self.last_command_type == 'slider':
+                data_str = f"SLD,{self.gripper1:.2f},{self.gripper2:.2f}\n"
+            elif self.last_command_type == 'preset':
+                data_str = f"PRE,{self.preset_num}\n"
+            elif self.last_command_type == 'gripper_toggle':
+                data_str = f"GRP,{self.gripper_state}\n"
+            elif self.last_command_type == 'mode':
+                data_str = f"MOD,{self.mode_value}\n"
+            else:
+                # Default: motor1 value only
+                data_str = f"{self.motor1_value:.2f}\n"
+
+            self.ser.write(data_str.encode())
+            self.ser.flush()
+            print(f"[SERIAL] Sent: {repr(data_str.strip())}")
             return True
         except Exception as e:
             print(f"[SERIAL] Send error: {e}")
@@ -157,123 +173,79 @@ class ZMQRobotServer:
     def parse_android_message(self, message):
         """
         Parse pesan dari Android dan kirim ke STM32
-        
+
         Format dari Android:
-        1. "x,y" - Joystick coordinates
-        2. "SLIDER:gripper1,gripper2" - Slider data
-        3. "PRESET:1" atau "PRESET:2" - Preset command
-        4. "GRIPPER:GRIP_ON" atau "GRIPPER:GRIP_OFF" - Gripper toggle
-        5. "MODE:MANUAL" atau "MODE:AUTO" - Mode switching
+        1. "x,y" - Joystick (JOY,x,y)
+        2. "SLIDER:g1,g2" - Slider (SLD,g1,g2)
+        3. "PRESET:1" - Preset (PRE,1)
+        4. "GRIPPER:GRIP_ON" - Gripper (GRP,ON/OFF)
+        5. "MODE:MANUAL" - Mode (MOD,MANUAL/AUTO)
+        6. "100.5" - Motor1 value only
         """
         try:
             msg = message.decode('utf-8').strip()
             print(f"[ZMQ] Received: {msg}")
-            
+
             # Parse berdasarkan format
             if msg.startswith("PRESET:"):
-                # Preset command
-                preset_num = int(msg.split(":")[1])
-                self.handle_preset(preset_num)
-                
+                # PRESET:1 atau PRESET:2
+                self.last_command_type = 'preset'
+                self.preset_num = int(msg.split(":")[1])
+                print(f"[PRESET] Num: {self.preset_num}")
+                self.send_to_stm()
+
             elif msg.startswith("GRIPPER:"):
-                # Gripper toggle
-                gripper_state = msg.split(":")[1]
-                self.handle_gripper_toggle(gripper_state)
-                
+                # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
+                self.last_command_type = 'gripper_toggle'
+                state = msg.split(":")[1]
+                self.gripper_state = "ON" if state == "GRIP_ON" else "OFF"
+                print(f"[GRIPPER] State: {self.gripper_state}")
+                self.send_to_stm()
+
             elif msg.startswith("MODE:"):
-                # Mode switching: "MODE:MANUAL" or "MODE:AUTO"
-                mode = msg.split(":")[1]
-                self.handle_mode_change(mode)
-                
+                # MODE:MANUAL atau MODE:AUTO
+                self.last_command_type = 'mode'
+                self.mode_value = msg.split(":")[1]
+                print(f"[MODE] Value: {self.mode_value}")
+                self.send_to_stm()
+
             elif msg.startswith("SLIDER:"):
-                # Slider data: "SLIDER:gripper1,gripper2"
-                data_part = msg.split(":", 1)[1]  # Ambil bagian setelah "SLIDER:"
+                # SLIDER:g1,g2
+                self.last_command_type = 'slider'
+                data_part = msg.split(":", 1)[1]
                 parts = data_part.split(",")
                 if len(parts) == 2:
-                    gripper1 = float(parts[0])
-                    gripper2 = float(parts[1])
-                    self.handle_slider_data(gripper1, gripper2)
-                    
+                    self.gripper1 = float(parts[0])
+                    self.gripper2 = float(parts[1])
+                    print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}")
+                    self.send_to_stm()
+
             else:
-                # Joystick coordinates: "x,y"
+                # Numeric data (CSV atau single value)
                 parts = msg.split(",")
+
                 if len(parts) == 2:
-                    x = float(parts[0])
-                    y = float(parts[1])
-                    self.handle_joystick(x, y)
-                    
+                    # Joystick: x,y
+                    self.last_command_type = 'joystick'
+                    self.joystick_x = float(parts[0])
+                    self.joystick_y = float(parts[1])
+                    print(f"[JOYSTICK] X: {self.joystick_x:.2f}, Y: {self.joystick_y:.2f}")
+                    self.send_to_stm()
+
+                elif len(parts) == 1:
+                    # Motor1 value only
+                    self.last_command_type = None
+                    self.motor1_value = float(parts[0])
+                    print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
+                    self.send_to_stm()
+                else:
+                    print(f"[WARN] Invalid format (got {len(parts)} values)")
+
+        except ValueError as e:
+            print(f"[ERROR] Parsing error: {e}")
         except Exception as e:
             print(f"[PARSE] Error parsing message: {e}")
     
-    def handle_joystick(self, x, y):
-        """Handle joystick data"""
-        self.joystick_x = x
-        self.joystick_y = y
-        print(f"[JOYSTICK] X: {x:.2f}, Y: {y:.2f}")
-        
-        # Kirim ke STM32
-        data = {
-            'type': 'joystick',
-            'x': x,
-            'y': y
-        }
-        self.send_to_stm(data)
-    
-    def handle_slider_data(self, gripper1, gripper2):
-        """Handle slider/gripper data"""
-        self.gripper1_value = gripper1
-        self.gripper2_value = gripper2
-        print(f"[SLIDER] Gripper1: {gripper1:.2f}, Gripper2: {gripper2:.2f}")
-        
-        # Kirim ke STM32
-        data = {
-            'type': 'slider',
-            'gripper1': gripper1,
-            'gripper2': gripper2
-        }
-        self.send_to_stm(data)
-    
-    def handle_preset(self, preset_number):
-        """Handle preset command"""
-        print(f"[PRESET] Preset {preset_number} activated")
-        
-        # Kirim ke STM32
-        data = {
-            'type': 'preset',
-            'preset': preset_number
-        }
-        self.send_to_stm(data)
-    
-    def handle_gripper_toggle(self, state):
-        """Handle gripper toggle ON/OFF"""
-        self.is_gripping = (state == "GRIP_ON")
-        print(f"[GRIPPER] State: {state}")
-        
-        # Kirim ke STM32
-        data = {
-            'type': 'gripper_toggle',
-            'state': 'ON' if self.is_gripping else 'OFF'
-        }
-        self.send_to_stm(data)
-    
-    def handle_mode_change(self, mode):
-        """Handle mode change between MANUAL and AUTO"""
-        if mode == "MANUAL":
-            self.mode = RobotMode.MANUAL
-            print(f"[MODE] Switched to MANUAL mode")
-        elif mode == "AUTO":
-            self.mode = RobotMode.AUTONOMOUS
-            print(f"[MODE] Switched to AUTONOMOUS mode")
-        else:
-            print(f"[MODE] Unknown mode: {mode}")
-            return
-        
-        # Kirim ke STM32
-        data = {
-            'type': 'mode',
-            'mode': mode
-        }
-        self.send_to_stm(data)
     
     def zmq_receive_loop(self):
         """Loop utama untuk menerima data dari ZMQ"""
@@ -329,9 +301,7 @@ class ZMQRobotServer:
         """Get current robot status"""
         return {
             'mode': self.mode.name,
-            'joystick': {'x': self.joystick_x, 'y': self.joystick_y},
-            'grippers': {'gripper1': self.gripper1_value, 'gripper2': self.gripper2_value},
-            'is_gripping': self.is_gripping,
+            'motor1': self.motor1_value,
             'serial_connected': self.serial_connected
         }
 
@@ -340,7 +310,7 @@ class ZMQRobotServer:
 if __name__ == "__main__":
     # Konfigurasi
     ZMQ_PORT = 6000  # Port yang sama dengan Android
-    SERIAL_PORT = 'COM3'  # Sesuaikan dengan port STM32 Anda
+    SERIAL_PORT = 'COM6'  # Sesuaikan dengan port STM32 Anda
     # Linux: '/dev/ttyUSB0' atau '/dev/ttyACM0'
     # Windows: 'COM3', 'COM4', dll
     BAUD_RATE = 115200
