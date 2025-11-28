@@ -91,6 +91,10 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.038" />
 
+    <!-- Koordinat Display -->
+
+    <!-- Setting Button -->
+
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/modeSwitch"
         android:layout_width="wrap_content"
@@ -99,16 +103,12 @@
         android:text="Manual"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/btnSetting"
-        app:layout_constraintHorizontal_bias="0.182"
+        app:layout_constraintHorizontal_bias="0.169"
         app:layout_constraintStart_toEndOf="@+id/videoStream"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.303"
+        app:layout_constraintVertical_bias="0.311"
         app:thumbTint="#AA5EE0"
         app:trackTint="#E0E0E0" />
-
-    <!-- Koordinat Display -->
-
-    <!-- Setting Button -->
 
     <TextView
         android:id="@+id/modeStatusText"
@@ -265,5 +265,11 @@
         app:layout_constraintStart_toEndOf="@+id/videoStream"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.17" />
+
+    <!-- Tambahkan widget ini ke dalam activity_controller.xml Anda -->
+
+    <!-- TextView untuk menampilkan IP address HP -->
+
+
 
 </androidx.constraintlayout.widget.ConstraintLayout>
