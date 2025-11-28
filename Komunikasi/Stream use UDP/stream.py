@@ -536,6 +536,5 @@ def UndistortFrame():
                     print(f"[INFO] Final target: UNICAST to {android_ip}")
                 else:
                     print(f"[INFO] Final target: BROADCAST (no Android IP received)")
-
 if __name__ == "__main__":
     UndistortFrame()
