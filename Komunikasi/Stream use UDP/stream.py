@@ -16,8 +16,8 @@ import zmq  # ZMQ for receiving Android IP
 # -------------------------
 # CONFIG (sesuaikan jika perlu)
 # -------------------------
-model_path = r'best.pt'
-yml_File = r'Calibration_Matrix copy.yaml'
+model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
+yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\Calibration_Matrix copy.yaml'
 
 SERIAL_PORT = "COM3"
 BAUDRATE = 115200
@@ -41,7 +41,7 @@ YOLO_W, YOLO_H = 480, 640
 
 # JPEG quality untuk broadcast
 JPEG_QUALITY = 50          # preview / local quality (high quality for local preview)
-JPEG_QUALITY_SEND = 30   # network stream quality (balance: kualitas vs bandwidth)
+JPEG_QUALITY_SEND = 45   # network stream quality (balance: kualitas vs bandwidth)
 
 # worker/send tuning
 SEND_EVERY_N_FRAMES = 2        # how often to enqueue a frame for sending (1 = every frame)
@@ -310,17 +310,15 @@ def UndistortFrame():
             if not ret:
                 continue
 
-            # undistort if enabled
             if USE_UNDISTORT and mapx is not None:
                 frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
 
-            # rotate to portrait (so UI expects portrait)
+            Brigthness = 0.5
+            rot = cv2.convertScaleAbs(rot,alpha=Brigthness, beta=0)
             rot = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-            # original rot size (keep for annotation quality)
             rot_h, rot_w = rot.shape[:2]
 
-            # YOLO: enqueue small image to worker (non-blocking) every YOLO_EVERY_N_FRAMES
             yolo_counter += 1
             should_run_yolo = (yolo_counter % YOLO_EVERY_N_FRAMES == 0)
             small = None
@@ -329,14 +327,11 @@ def UndistortFrame():
                 try:
                     yolo_in_q.put_nowait(small)
                 except queue.Full:
-                    # worker busy: reuse cached results for this frame
                     if DEBUG:
                         pass
 
-            # results will be read from cached_results / cached_boxes (updated by worker)
             results = cached_results
 
-            # We will draw on a copy of the original rot to keep quality (no blur)
             annotated = rot.copy()
 
             # scale factors to map small -> rot
@@ -359,8 +354,10 @@ def UndistortFrame():
                 boxes = cached_boxes
 
             if boxes is not None and len(boxes) > 0:
-                # iterate all boxes (or take first) — we'll draw all
-                for b in boxes:
+                filtered_boxes = [b for b in boxes if float(b.conf[0]) > 0.75]
+                filtered_boxes = filtered_boxes[:5]
+
+                for b in filtered_boxes:
                     x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
                     cls = int(b.cls[0])
                     conf = float(b.conf[0])
@@ -374,7 +371,7 @@ def UndistortFrame():
                     label = model.names[cls] if hasattr(model, "names") else str(cls)
 
                     # draw box and label on high-res annotated
-                    draw_box_and_label(annotated, (rx1, ry1), (rx2, ry2), label_text=label, conf=conf, color=(0,165,255), thickness=2)
+                    draw_box_and_label(annotated, (rx1, ry1), (rx2, ry2), label_text=label, conf=conf, color=(225,0,0), thickness=3)
 
                     # compute center of first/highest conf object for logic (you can choose first only)
                 # choose first box as primary
@@ -448,9 +445,9 @@ def UndistortFrame():
                 cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 6, (255,255,0), -1)
 
             # write X Y text at bottom
-            txt = f"X: {dist_x_cm:.2f} cm | Y: {dist_y_cm:.2f} cm"
-            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 3, cv2.LINE_AA)
-            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 1, cv2.LINE_AA)
+            txt = f"X:{dist_x_cm:.2f}cm | Y:{dist_y_cm:.2f}cm"
+            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 3, cv2.LINE_AA)
+            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,0,255), 1, cv2.LINE_AA)
 
             # Send frame: enqueue a smaller display frame to sender worker (non-blocking)
             frame_counter += 1
