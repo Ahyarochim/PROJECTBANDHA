@@ -11,18 +11,28 @@ import sys
 import traceback
 import threading
 import queue
+import zmq  # ZMQ for receiving Android IP
 
 # -------------------------
 # CONFIG (sesuaikan jika perlu)
 # -------------------------
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\Calibration_Matrix copy.yaml'
+model_path = r'best.pt'
+yml_File = r'Calibration_Matrix copy.yaml'
 
 SERIAL_PORT = "COM3"
 BAUDRATE = 115200
+FPS = 30
 
-BROADCAST_IP = "255.255.255.255"
-Port = 6000
+# UDP Video Stream Config
+BROADCAST_IP = "255.255.255.255"  # Fallback jika IP Android belum diterima
+UDP_VIDEO_PORT = 6000
+
+# ZMQ Config (untuk terima command dari Android, termasuk IP address)
+ZMQ_COMMAND_PORT = 6000  # HARUS SAMA dengan Android app!
+
+# Android IP (akan di-update dari ZMQ)
+android_ip = None  # None = belum terima, akan fallback ke broadcast
+android_ip_lock = threading.Lock()  # Thread-safe update
 
 # Kamera request (hint)
 REQ_W, REQ_H = 360, 400   
@@ -68,11 +78,17 @@ except Exception:
 
 print(f"[INFO] Using device: {DEVICE}")
 
-# SOCKET
+# UDP SOCKET (untuk kirim video)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Tetap enable broadcast untuk fallback
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
 sock.settimeout(1.0)
+
+# ZMQ SOCKET (untuk terima command dari Android)
+zmq_context = zmq.Context()
+zmq_socket = zmq_context.socket(zmq.PULL)  # PULL socket untuk terima dari Android
+zmq_socket.bind(f"tcp://*:{ZMQ_COMMAND_PORT}")
+print(f"[ZMQ] Listening for commands on port {ZMQ_COMMAND_PORT}")
 
 # CAMERA
 Camera = cv2.VideoCapture(0)
@@ -125,6 +141,55 @@ def draw_box_and_label(img, xy1, xy2, label_text=None, conf=None, color=(255,0,0
         cv2.putText(img, txt, (x1 + 3, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1, cv2.LINE_AA)
 
 # -------------------------
+# ZMQ LISTENER (untuk terima IP dari Android)
+# -------------------------
+def zmq_listener():
+    """Thread untuk menerima command dari Android (termasuk IP address)"""
+    global android_ip
+    print("[ZMQ] Listener thread started")
+    
+    while True:
+        try:
+            # Poll dengan timeout (non-blocking)
+            if zmq_socket.poll(100):  # 100ms timeout
+                message = zmq_socket.recv()
+                msg = message.decode('utf-8').strip()
+                
+                # Parse CLIENT_IP command (dari Android saat connect)
+                if msg.startswith("CLIENT_IP:"):
+                    ip = msg.split(":", 1)[1]
+                    with android_ip_lock:
+                        old_ip = android_ip
+                        android_ip = ip
+                    
+                    if old_ip != ip:
+                        print(f"\n{'='*60}")
+                        print(f"[ZMQ] ✅ Client connected from IP: {android_ip}")
+                        print(f"[ZMQ] 🎥 Switching to UNICAST mode (target: {android_ip})")
+                        print(f"{'='*60}\n")
+                
+                # Handle other commands (optional, bisa ditambahkan nanti)
+                elif msg.startswith("MODE:"):
+                    mode = msg.split(":", 1)[1]
+                    if DEBUG:
+                        print(f"[ZMQ] Mode changed to: {mode}")
+                        
+                elif msg.startswith("ROTATE:"):
+                    rotate_val = msg.split(":", 1)[1]
+                    if DEBUG:
+                        print(f"[ZMQ] Rotate command: {rotate_val}")
+                
+                # Ignore joystick, slider, dll (sudah di-handle di ReceivedFix.py)
+                    
+        except zmq.Again:
+            # No message available, continue
+            time.sleep(0.05)
+        except Exception as e:
+            if DEBUG:
+                print(f"[ZMQ] Listener error: {e}")
+            time.sleep(0.1)
+
+# -------------------------
 # MAIN
 # -------------------------
 def UndistortFrame():
@@ -145,6 +210,11 @@ def UndistortFrame():
         if USE_UNDISTORT:
             print("[WARN] Undistort requested but calibration missing. Skipping undistort.")
         USE_UNDISTORT = False
+    
+    # Start ZMQ listener thread
+    zmq_thread = threading.Thread(target=zmq_listener, daemon=True)
+    zmq_thread.start()
+    print("[ZMQ] Listener thread started for receiving Android IP")
 
     # ---- workers setup ----
     # YOLO worker: process only latest small frame (queue size=1)
@@ -198,15 +268,22 @@ def UndistortFrame():
                 data = buf.tobytes()
                 header = f"{len(data):08d}".encode('ascii')
                 try:
+                    # Tentukan target IP (unicast atau broadcast)
+                    with android_ip_lock:
+                        target_ip = android_ip if android_ip else BROADCAST_IP
+                    
                     # track data size for diagnostics
                     nonlocal last_sent_size
                     last_sent_size = len(data)
-                    sock.sendto(header + data, (BROADCAST_IP, Port))
+                    
+                    # Kirim ke target (unicast jika IP sudah diterima, broadcast jika belum)
+                    sock.sendto(header + data, (target_ip, UDP_VIDEO_PORT))
                     sent_counter += 1
                 except Exception as e:
                     # log every error (not just every 100) to catch issues
                     if DEBUG:
-                        print("[WARN] broadcast failed:", e)
+                        mode = "unicast" if android_ip else "broadcast"
+                        print(f"[WARN] {mode} send failed:", e)
             except Exception as e:
                 if DEBUG:
                     print("[WARN] sender_worker exception:", e)
@@ -325,7 +402,7 @@ def UndistortFrame():
                 if stable_conf is not None and stable_conf > CONF_THRESHOLD:
                     # choose label
                     lab = model.names[int(primary.cls[0])]
-                    if lab == "Azqya":   # keep your logic
+                    if lab == "Fake":   # keep your logic
                         detected = True
                         # offset (pixels)
                         center_x = rot_w // 2
@@ -395,13 +472,18 @@ def UndistortFrame():
                 sender_q_size = sender_q.qsize()
                 yolo_q_size = yolo_in_q.qsize()
                 
+                # Get current target mode
+                with android_ip_lock:
+                    target_mode = f"UNICAST ({android_ip})" if android_ip else "BROADCAST"
+                
                 print(f"[METRICS] "
                       f"FPS={current_fps:.1f} | "
                       f"sent={sent_counter} | "
                       f"dropped={dropped_send_counter} | "
                       f"sender_q={sender_q_size} | "
                       f"yolo_q={yolo_q_size} | "
-                      f"last_data_size={last_sent_size} bytes")
+                      f"last_data_size={last_sent_size} bytes | "
+                      f"mode={target_mode}")
                 
                 fps_frame_count = 0
                 last_log_time = now
@@ -442,11 +524,18 @@ def UndistortFrame():
             pass
         Camera.release()
         sock.close()
+        zmq_socket.close()
+        zmq_context.term()
         if ser and hasattr(ser, "is_open") and ser.is_open:
             ser.close()
         cv2.destroyAllWindows()
         if DEBUG:
             print(f"[INFO] sent={sent_counter}, dropped_send={dropped_send_counter}")
+            with android_ip_lock:
+                if android_ip:
+                    print(f"[INFO] Final target: UNICAST to {android_ip}")
+                else:
+                    print(f"[INFO] Final target: BROADCAST (no Android IP received)")
 
 if __name__ == "__main__":
     UndistortFrame()

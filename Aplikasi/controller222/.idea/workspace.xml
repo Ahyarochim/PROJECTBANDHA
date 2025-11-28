@@ -132,7 +132,7 @@
   <component name="ClangdSettings">
     <option name="formatViaClangd" value="false" />
   </component>
-  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[DeviceId(pluginId=PhysicalDevice, isTemplate=false, identifier=serial=48d917e5)]" />
+  <component name="ExecutionTargetManager" SELECTED_TARGET="device_and_snapshot_combo_box_target[DeviceId(pluginId=PhysicalDevice, isTemplate=false, identifier=serial=RR8R600CSPW)]" />
   <component name="ExternalProjectsData">
     <projectState path="$PROJECT_DIR$">
       <ProjectState />
@@ -360,12 +360,12 @@
       <map>
         <entry key="com.example.controllerzmq">
           <value>
-            <CheckInfo lastCheckTimestamp="1764335598617" />
+            <CheckInfo lastCheckTimestamp="1764169976228" />
           </value>
         </entry>
         <entry key="com.example.controllerzmq.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1764335598615" />
+            <CheckInfo lastCheckTimestamp="1764169976228" />
           </value>
         </entry>
       </map>
