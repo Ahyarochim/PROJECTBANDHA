@@ -296,32 +296,37 @@ def main():
             color = (0, 255, 0) if in_center else (0, 0, 255)
 
             if boxes is not None and len(boxes) > 0:
+                # Filter HANYA KFS-Blue dan KFS-Red dengan confidence > 0.7
                 filtered_boxes = [b for b in boxes if float(b.conf[0]) > 0.7]
-                # filtered_boxes = filtered_boxes[:5]
-                primary = boxes[0]
-                x1, y1, x2, y2 = [float(v) for v in primary.xyxy[0]]
                 
-                scaled_x1 = x1 * sx
-                scaled_y1 = y1 * sy
-                scaled_x2 = x2 * sx
-                scaled_y2 = y2 * sy
-
-                box_width = scaled_x2 - scaled_x1
-                box_height = scaled_y2 - scaled_y1
-
-                indicator_size = margin * 2
+                # Pisahkan berdasarkan label
+                blue_boxes = []
+                red_boxes = []
                 
-                width_diff = abs(box_width - indicator_size) / indicator_size * 100
-                height_diff = abs(box_height - indicator_size) / indicator_size * 100
-                avg_diff = (width_diff + height_diff) / 2  # * 100 UDAH di atas
-        
-                if avg_diff < 35:
-                    color = (0, 255, 0)      
-                elif avg_diff < 50:
-                    color = (0, 255, 255)    
-                else:
-                    color = (0, 0, 255)      
-
+                for b in filtered_boxes:
+                    cls = int(b.cls[0])
+                    label = model.names[cls] if hasattr(model, "names") else str(cls)
+                    
+                    if label == "KFS-Blue":
+                        blue_boxes.append(b)
+                    elif label == "KFS-Red":
+                        red_boxes.append(b)
+                
+                # SISTEM PRIORITAS: Blue > Red
+                # 1. Jika ada Blue, ambil Blue dengan confidence tertinggi
+                # 2. Jika tidak ada Blue, ambil Red dengan confidence tertinggi
+                selected_target = None
+                
+                if len(blue_boxes) > 0:
+                    # Ada Blue - ambil yang confidence tertinggi
+                    selected_target = max(blue_boxes, key=lambda b: float(b.conf[0]))
+                    lab = "KFS-Blue"
+                elif len(red_boxes) > 0:
+                    # Tidak ada Blue, ambil Red dengan confidence tertinggi
+                    selected_target = max(red_boxes, key=lambda b: float(b.conf[0]))
+                    lab = "KFS-Red"
+                
+                # Gambar SEMUA box yang terfilter (untuk visualisasi)
                 for b in filtered_boxes:
                     x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
                     cls = int(b.cls[0])
@@ -330,30 +335,57 @@ def main():
                     rx2, ry2 = x2 * sx, y2 * sy
                     label = model.names[cls] if hasattr(model, "names") else str(cls)
                     draw_box_and_label(annotated, (rx1, ry1), (rx2, ry2), label_text=label, conf=conf, color=(225, 0, 0), thickness=3)
-
-
-                cx_small = (x1 + x2) / 2.0  # x1,x2 dari primary (line 290)
-                cy_small = (y1 + y2) / 2.0
-
-                obj_cx = int(cx_small * sx)
-                obj_cy = int(cy_small * sy)
-                conf_val = float(primary.conf[0])
-                bufferConf.append(conf_val)
-
-                if len(bufferConf) == bufferConf.maxlen:
-                    stable_conf = sum(bufferConf) / len(bufferConf)
-
-                if stable_conf is not None and stable_conf > CONF_THRESHOLD:
-                    lab = model.names[int(primary.cls[0])]
-                    if lab == "KFS-Blue" or lab == "KFS-Red":
+                
+                # Proses HANYA selected target (priority target)
+                if selected_target is not None:
+                    x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
+                    
+                    # Hitung ukuran box untuk color indicator
+                    scaled_x1 = x1 * sx
+                    scaled_y1 = y1 * sy
+                    scaled_x2 = x2 * sx
+                    scaled_y2 = y2 * sy
+                    
+                    box_width = scaled_x2 - scaled_x1
+                    box_height = scaled_y2 - scaled_y1
+                    
+                    indicator_size = margin * 2
+                    
+                    width_diff = abs(box_width - indicator_size) / indicator_size * 100
+                    height_diff = abs(box_height - indicator_size) / indicator_size * 100
+                    avg_diff = (width_diff + height_diff) / 2
+                    
+                    # Tentukan warna crosshair berdasarkan ukuran
+                    if avg_diff < 35:
+                        color = (0, 255, 0)      # Hijau - ukuran pas
+                    elif avg_diff < 50:
+                        color = (0, 255, 255)    # Kuning - mendekati
+                    else:
+                        color = (0, 0, 255)      # Merah - terlalu jauh
+                    
+                    # Hitung center point dari selected target
+                    cx_small = (x1 + x2) / 2.0
+                    cy_small = (y1 + y2) / 2.0
+                    
+                    obj_cx = int(cx_small * sx)
+                    obj_cy = int(cy_small * sy)
+                    conf_val = float(selected_target.conf[0])
+                    bufferConf.append(conf_val)
+                    
+                    if len(bufferConf) == bufferConf.maxlen:
+                        stable_conf = sum(bufferConf) / len(bufferConf)
+                    
+                    # Validasi stable confidence
+                    if stable_conf is not None and stable_conf > CONF_THRESHOLD:
                         detected = True
                         offset_x = obj_cx - center_x
                         offset_y = obj_cy - center_y
-
+                        
                         dist_x_cm = offset_x / pxlPercm
                         dist_y_cm = offset_y / pxlPercm
                         in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
                 
+                # Kirim detection data (untuk monitoring/debugging)
                 detection_data = {
                     "timestamp": time.time(),
                     "detected": detected,
@@ -361,15 +393,19 @@ def main():
                     "class_name": lab if detected else "Unknown",
                     "confidence_now": conf_val,
                     "stable_confidence": stable_conf if stable_conf is not None else 0.0,
-                    "center": {"x": obj_cx, "y": obj_cy},
-                    "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+                    "center": {"x": obj_cx if obj_cx else 0, "y": obj_cy if obj_cy else 0},
                     "distance": {
                         "x_cm": dist_x_cm,
                         "y_cm": dist_y_cm,
                         "offset_x": int(offset_x) if 'offset_x' in locals() else 0,
                         "offset_y": int(offset_y) if 'offset_y' in locals() else 0
                     },
-                    "frame_info": {"width": rot_w, "height": rot_h, "margin": margin}
+                    "frame_info": {"width": rot_w, "height": rot_h, "margin": margin},
+                    "priority_info": {
+                        "blue_detected": len(blue_boxes),
+                        "red_detected": len(red_boxes),
+                        "selected_class": lab if selected_target else "None"
+                    }
                 }
                 try:
                     detection_zmq_q.put_nowait(detection_data)
@@ -382,7 +418,7 @@ def main():
             cv2.line(annotated, (0, center_y), (rot_w, center_y), color, 2)
             cv2.rectangle(annotated, (center_x - margin, center_y - margin), (center_x + margin, center_y + margin), color, 2)
 
-            if obj_cx is not None:
+            if detected and obj_cx is not None and (lab == "KFS-Blue" or lab == "KFS-Red"):
                 cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 6, (255, 255, 0), -1)
 
             txt = f"X:{dist_x_cm:.2f}cm | Y:{dist_y_cm:.2f}cm"
