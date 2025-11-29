@@ -32,7 +32,7 @@ FPS_LOG_INTERVAL = 5.0
 margin = 100
 bufferConf = deque(maxlen=5)
 CONF_THRESHOLD = 0.6
-BRIGHTNESS_FACTOR = 1.3
+BRIGHTNESS_FACTOR = 1.5
 
 DEBUG = True
 USE_UNDISTORT = False
@@ -292,11 +292,12 @@ def main():
             lab = "Unknown"
 
             center_x = rot_w // 2
-            center_y = rot_h // 2
+            center_y = int(rot_h *0.65) 
             color = (0, 255, 0) if in_center else (0, 0, 255)
 
             if boxes is not None and len(boxes) > 0:
                 filtered_boxes = [b for b in boxes if float(b.conf[0]) > 0.7]
+                # filtered_boxes = filtered_boxes[:5]
                 primary = boxes[0]
                 x1, y1, x2, y2 = [float(v) for v in primary.xyxy[0]]
                 
