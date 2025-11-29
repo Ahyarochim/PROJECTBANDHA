@@ -5,7 +5,6 @@ import numpy as np
 import yaml
 from collections import deque
 import time
-import serial
 import sys
 import traceback
 import threading
@@ -16,39 +15,30 @@ import msgpack
 model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\best.pt'
 yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\Stream use UDP\Calibration_Matrix copy.yaml'
 
-SERIAL_PORT = "COM3"
-BAUDRATE = 115200
-FPS = 30
+PORT = 6000
+REQ_W, REQ_H = 360, 400
+YOLO_W, YOLO_H = 480, 640
+JPEG_QUALITY_SEND = 50
 
-BROADCAST_IP = "255.255.255.255" 
-PORT = 6000 
-
-android_ip = None  
-android_ip_lock = threading.Lock()  
-
-REQ_W, REQ_H = 360, 400   
-YOLO_W, YOLO_H = 480, 640  
-
-JPEG_QUALITY = 50         
-JPEG_QUALITY_SEND = 45   
-
-SEND_EVERY_N_FRAMES = 2        # how often to enqueue a frame for sending (1 = every frame)
-SENDER_QUEUE_MAX = 2           # small queue for frames to send (drop when full)
-YOLO_EVERY_N_FRAMES = 2        # run YOLO every N frames (main thread enqueues)
+SEND_EVERY_N_FRAMES = 2
+SENDER_QUEUE_MAX = 2
+YOLO_EVERY_N_FRAMES = 2
 YOLO_CONF_THRESHOLD = 0.35
 SENDER_THREAD_JOIN_TIMEOUT = 1.0
-SHOW_PREVIEW = True            
-SHOW_EVERY_N_FRAMES = 2       
+SHOW_PREVIEW = True
+SHOW_EVERY_N_FRAMES = 2
+FPS_LOG_INTERVAL = 5.0
 
-FPS_LOG_INTERVAL = 5.0  
-
-# center / detection params
 margin = 100
 bufferConf = deque(maxlen=5)
 CONF_THRESHOLD = 0.6
+BRIGHTNESS_FACTOR = 1.3
 
 DEBUG = True
-USE_UNDISTORT = False   # toggle undistort (False = lebih ringan)
+USE_UNDISTORT = False
+
+android_ip = None
+android_ip_lock = threading.Lock()
 
 model = YOLO(model_path)
 
@@ -60,22 +50,22 @@ except Exception:
 
 print(f"[INFO] Using device: {DEVICE}")
 
-
+# UDP Socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Tetap enable broadcast untuk fallback
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
 sock.settimeout(1.0)
 
-
+# ZMQ Context
 zmq_context = zmq.Context()
-zmq_socket = zmq_context.socket(zmq.PULL)  # PULL socket untuk terima dari Android
+zmq_socket = zmq_context.socket(zmq.PULL)
 zmq_socket.bind(f"tcp://*:{PORT}")
 print(f"[ZMQ] Listening for commands on port {PORT}")
 
+# Camera
 Camera = cv2.VideoCapture(0)
 Camera.set(cv2.CAP_PROP_FRAME_WIDTH, REQ_W)
 Camera.set(cv2.CAP_PROP_FRAME_HEIGHT, REQ_H)
-Camera.set(cv2.CAP_PROP_FPS, FPS)
+Camera.set(cv2.CAP_PROP_FPS, 30)
 Camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 if not Camera.isOpened():
@@ -94,26 +84,15 @@ def loadCalibration(path):
         print("[WARN] Load calibration failed:", e)
         return None, None, 10.0
 
-def init_serial():
-    try:
-        ser = serial.Serial(SERIAL_PORT, BAUDRATE, timeout=0.1)
-        time.sleep(2)
-        print("[OK] STM32 Connected")
-        return ser
-    except Exception as e:
-        print("[WARN] Serial gagal dibuka:", e)
-        return None
-
-def draw_box_and_label(img, xy1, xy2, label_text=None, conf=None, color=(255,0,0), thickness=2):
-    x1,y1 = int(xy1[0]), int(xy1[1])
-    x2,y2 = int(xy2[0]), int(xy2[1])
-    cv2.rectangle(img, (x1,y1), (x2,y2), color, thickness)
+def draw_box_and_label(img, xy1, xy2, label_text=None, conf=None, color=(255, 0, 0), thickness=2):
+    x1, y1 = int(xy1[0]), int(xy1[1])
+    x2, y2 = int(xy2[0]), int(xy2[1])
+    cv2.rectangle(img, (x1, y1), (x2, y2), color, thickness)
     if label_text:
         txt = f"{label_text}" + (f" {conf:.2f}" if conf is not None else "")
         (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1)
-
         cv2.rectangle(img, (x1, y1 - th - 6), (x1 + tw + 6, y1), color, -1)
-        cv2.putText(img, txt, (x1 + 3, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1, cv2.LINE_AA)
+        cv2.putText(img, txt, (x1 + 3, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
 
 def zmq_listener():
     global android_ip
@@ -121,10 +100,10 @@ def zmq_listener():
     
     while True:
         try:
-            # Poll dengan timeout (non-blocking)
-            if zmq_socket.poll(100):  # 100ms timeout
+            if zmq_socket.poll(100):
                 message = zmq_socket.recv()
                 msg = message.decode('utf-8').strip()
+                
                 if msg.startswith("CLIENT_IP:"):
                     ip = msg.split(":", 1)[1]
                     with android_ip_lock:
@@ -133,36 +112,22 @@ def zmq_listener():
                     
                     if old_ip != ip:
                         print(f"\n{'='*60}")
-                        print(f"[ZMQ] ✅ Client connected from IP: {android_ip}")
-                        print(f"[ZMQ] 🎥 Switching to UNICAST mode (target: {android_ip})")
+                        print(f"[ZMQ] ✅ Client connected: {android_ip}")
+                        print(f"[ZMQ] 🎥 Switching to UNICAST mode")
                         print(f"{'='*60}\n")
-                
-                elif msg.startswith("MODE:"):
-                    mode = msg.split(":", 1)[1]
-                    if DEBUG:
-                        print(f"[ZMQ] Mode changed to: {mode}")
                         
-                elif msg.startswith("ROTATE:"):
-                    rotate_val = msg.split(":", 1)[1]
-                    if DEBUG:
-                        print(f"[ZMQ] Rotate command: {rotate_val}")
-                # Ignore joystick, slider, dll (sudah di-handle di ReceivedFix.py)
-                    
         except zmq.Again:
-            # No message available, continue
             time.sleep(0.05)
         except Exception as e:
             if DEBUG:
                 print(f"[ZMQ] Listener error: {e}")
             time.sleep(0.1)
 
-def UndistortFrame():
-    global USE_UNDISTORT, mapx, mapy
-
-    ser = init_serial()
+def main():
+    global USE_UNDISTORT, android_ip
+    
     mtx, dist, pxlPercm = loadCalibration(yml_File)
 
-    # prepare undistort maps if enabled
     mapx = mapy = None
     if USE_UNDISTORT and mtx is not None and dist is not None:
         cam_w = int(Camera.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -171,24 +136,19 @@ def UndistortFrame():
         mapx, mapy = cv2.initUndistortRectifyMap(mtx, dist, None, new_mtx, (cam_w, cam_h), cv2.CV_32FC1)
         print("[INFO] Undistort maps ready")
     else:
-        if USE_UNDISTORT:
-            print("[WARN] Undistort requested but calibration missing. Skipping undistort.")
         USE_UNDISTORT = False
     
-    # Start ZMQ listener thread
+    # ZMQ Listener Thread
     zmq_thread = threading.Thread(target=zmq_listener, daemon=True)
     zmq_thread.start()
-    print("[ZMQ] Listener thread started for receiving Android IP")
 
-    # ---- workers setup ----
-    # YOLO worker: process only latest small frame (queue size=1)
+    # YOLO Worker
     yolo_in_q = queue.Queue(maxsize=1)
     worker_stop = threading.Event()
-    cached_results = None
     cached_boxes = None
 
     def yolo_worker():
-        nonlocal cached_results, cached_boxes
+        nonlocal cached_boxes
         while not worker_stop.is_set():
             try:
                 small = yolo_in_q.get(timeout=0.1)
@@ -196,7 +156,6 @@ def UndistortFrame():
                 continue
             try:
                 res = model(small, device=DEVICE, conf=YOLO_CONF_THRESHOLD, verbose=False)
-                cached_results = res
                 cached_boxes = res[0].boxes if res and len(res) > 0 else None
             except Exception as e:
                 if DEBUG:
@@ -210,14 +169,15 @@ def UndistortFrame():
     yw_thread = threading.Thread(target=yolo_worker, daemon=True)
     yw_thread.start()
 
-    # Sender worker: encode & send off main thread
+    # Sender Worker (UDP frames to Android)
     sender_q = queue.Queue(maxsize=SENDER_QUEUE_MAX)
     sender_stop = threading.Event()
     sent_counter = 0
     dropped_send_counter = 0
+    last_sent_size = 0
 
     def sender_worker():
-        nonlocal sent_counter, dropped_send_counter
+        nonlocal sent_counter, dropped_send_counter, last_sent_size
         while not sender_stop.is_set():
             try:
                 frame_to_send = sender_q.get(timeout=0.1)
@@ -226,28 +186,22 @@ def UndistortFrame():
             try:
                 ok, buf = cv2.imencode('.jpg', frame_to_send, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY_SEND])
                 if not ok:
-                    if DEBUG:
-                        print("[WARN] encode failed in sender")
                     continue
                 data = buf.tobytes()
                 header = f"{len(data):08d}".encode('ascii')
                 try:
                     with android_ip_lock:
-                        target_ip = android_ip if android_ip else BROADCAST_IP
-                    # track data size for diagnostics
-                    nonlocal last_sent_size
+                        target_ip = android_ip if android_ip else "255.255.255.255"
                     last_sent_size = len(data)
-                    # Kirim ke target (unicast jika IP sudah diterima, broadcast jika belum)
-                    sock.sendto(header + data, (target_ip,PORT))
+                    sock.sendto(header + data, (target_ip, PORT))
                     sent_counter += 1
                 except Exception as e:
-                    # log every error (not just every 100) to catch issues
                     if DEBUG:
                         mode = "unicast" if android_ip else "broadcast"
-                        print(f"[WARN] {mode} send failed:", e)
+                        print(f"[WARN] {mode} send failed: {e}")
             except Exception as e:
                 if DEBUG:
-                    print("[WARN] sender_worker exception:", e)
+                    print("[WARN] sender_worker error:", e)
             finally:
                 try:
                     sender_q.task_done()
@@ -257,17 +211,15 @@ def UndistortFrame():
     s_thread = threading.Thread(target=sender_worker, daemon=True)
     s_thread.start()
 
-        
+    # Detection ZMQ Worker (Send detection data to Server)
     detection_zmq_q = queue.Queue(maxsize=1)
-    detection_error_count = 0
 
     def detection_zmq_worker():
-        global detection_error_count
         zmq_sender = zmq_context.socket(zmq.PUSH)
         try:
-            zmq_sender.connect("tcp://localhost:5555")  # Connect ke server yang PULL
+            zmq_sender.connect("tcp://localhost:5555")
             if DEBUG:
-                print("[ZMQ-PUSH] Detection sender ready on port 5555")
+                print("[ZMQ-PUSH] Detection sender ready on port 5555 (sending to Server)")
         except Exception as e:
             if DEBUG:
                 print(f"[WARN] Detection ZMQ connection failed: {e}")
@@ -278,17 +230,13 @@ def UndistortFrame():
                 detection = detection_zmq_q.get(timeout=0.2)
                 if detection is not None:
                     try:
-                    # Serialize dengan MessagePack
                         packed = msgpack.packb(detection, use_bin_type=True)
                         zmq_sender.send(packed, flags=zmq.NOBLOCK)
-                        detection_error_count = 0  # Reset error count on success
                     except zmq.Again:
-                        # Non-blocking send timeout (server queue full)
                         pass
                     except Exception as e:
-                        detection_error_count += 1
-                        if DEBUG and detection_error_count % 20 == 0:
-                            print(f"[WARN] ZMQ send error: {e}")
+                        if DEBUG:
+                            print(f"[WARN] ZMQ detection send error: {e}")
             except queue.Empty:
                 pass
             except Exception as e:
@@ -298,13 +246,11 @@ def UndistortFrame():
     dz_thread = threading.Thread(target=detection_zmq_worker, daemon=True)
     dz_thread.start()
 
-    data_sent = False
+    # Main Loop
     frame_counter = 0
     yolo_counter = 0
-    fps_start_time = time.time()
     fps_frame_count = 0
     last_log_time = time.time()
-    last_sent_size = 0
 
     try:
         while True:
@@ -316,133 +262,113 @@ def UndistortFrame():
                 frame = cv2.remap(frame, mapx, mapy, cv2.INTER_LINEAR)
 
             rot = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            Brigthness = 1.3
-            rot = cv2.convertScaleAbs(rot,alpha=Brigthness, beta=0)
+            rot = cv2.convertScaleAbs(rot, alpha=BRIGHTNESS_FACTOR, beta=0)
 
             rot_h, rot_w = rot.shape[:2]
 
+            # YOLO Processing
             yolo_counter += 1
-            should_run_yolo = (yolo_counter % YOLO_EVERY_N_FRAMES == 0)
-            small = None
-            if should_run_yolo:
+            if yolo_counter % YOLO_EVERY_N_FRAMES == 0:
                 small = cv2.resize(rot, (YOLO_W, YOLO_H), interpolation=cv2.INTER_LINEAR)
                 try:
                     yolo_in_q.put_nowait(small)
                 except queue.Full:
-                    if DEBUG:
-                        pass
-
-            results = cached_results
+                    pass
 
             annotated = rot.copy()
-
-            # scale factors to map small -> rot
             sx = rot_w / YOLO_W
             sy = rot_h / YOLO_H
-            boxes = None
-            if results:
-                try:
-                    if len(results) > 0 and hasattr(results[0], "boxes"):
-                        boxes = results[0].boxes
-                except Exception as e:
-                    if DEBUG:
-                        print("[WARN] reading cached_results failed:", e)
+            
+            boxes = cached_boxes
 
-            # fallback to last known boxes from worker (if any)
-            if boxes is None and cached_boxes is not None:
-                boxes = cached_boxes
+            detected = False
+            in_center = False
+            dist_x_cm = 0.0
+            dist_y_cm = 0.0
+            obj_cx = None
+            obj_cy = None
+            conf_val = 0.0
+            stable_conf = None
+            lab = "Unknown"
+
+            center_x = rot_w // 2
+            center_y = rot_h // 2
+            color = (0, 255, 0) if in_center else (0, 0, 255)
 
             if boxes is not None and len(boxes) > 0:
-                filtered_boxes = [b for b in boxes if float(b.conf[0]) > 0.75]
-                filtered_boxes = filtered_boxes[:5]
+                filtered_boxes = [b for b in boxes if float(b.conf[0]) > 0.7]
+                primary = boxes[0]
+                x1, y1, x2, y2 = [float(v) for v in primary.xyxy[0]]
+                
+                scaled_x1 = x1 * sx
+                scaled_y1 = y1 * sy
+                scaled_x2 = x2 * sx
+                scaled_y2 = y2 * sy
+
+                box_width = scaled_x2 - scaled_x1
+                box_height = scaled_y2 - scaled_y1
+
+                indicator_size = margin * 2
+                
+                width_diff = abs(box_width - indicator_size) / indicator_size * 100
+                height_diff = abs(box_height - indicator_size) / indicator_size * 100
+                avg_diff = (width_diff + height_diff) / 2  # * 100 UDAH di atas
+        
+                if avg_diff < 35:
+                    color = (0, 255, 0)      
+                elif avg_diff < 50:
+                    color = (0, 255, 255)    
+                else:
+                    color = (0, 0, 255)      
 
                 for b in filtered_boxes:
                     x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
                     cls = int(b.cls[0])
                     conf = float(b.conf[0])
-                    rx1 = x1 * sx
-                    ry1 = y1 * sy
-                    rx2 = x2 * sx
-                    ry2 = y2 * sy
-
+                    rx1, ry1 = x1 * sx, y1 * sy
+                    rx2, ry2 = x2 * sx, y2 * sy
                     label = model.names[cls] if hasattr(model, "names") else str(cls)
+                    draw_box_and_label(annotated, (rx1, ry1), (rx2, ry2), label_text=label, conf=conf, color=(225, 0, 0), thickness=3)
 
-                    draw_box_and_label(annotated, (rx1, ry1), (rx2, ry2), label_text=label, conf=conf, color=(225,0,0), thickness=3)
 
-                primary = boxes[0]
-                x1, y1, x2, y2 = [float(v) for v in primary.xyxy[0]]
-                
-                cx_small = (x1 + x2) / 2.0
+                cx_small = (x1 + x2) / 2.0  # x1,x2 dari primary (line 290)
                 cy_small = (y1 + y2) / 2.0
 
                 obj_cx = int(cx_small * sx)
                 obj_cy = int(cy_small * sy)
-
                 conf_val = float(primary.conf[0])
                 bufferConf.append(conf_val)
 
-                stable_conf = None
                 if len(bufferConf) == bufferConf.maxlen:
                     stable_conf = sum(bufferConf) / len(bufferConf)
 
-                detected = False
-                in_center = False
-                dist_x_cm = 0.0
-                dist_y_cm = 0.0
-
                 if stable_conf is not None and stable_conf > CONF_THRESHOLD:
-
                     lab = model.names[int(primary.cls[0])]
-                    if lab == "KFS-Blue" or lab == "KFS-Red":  
+                    if lab == "KFS-Blue" or lab == "KFS-Red":
                         detected = True
-                        center_x = rot_w // 2
-                        center_y = rot_h // 2
                         offset_x = obj_cx - center_x
                         offset_y = obj_cy - center_y
 
                         dist_x_cm = offset_x / pxlPercm
                         dist_y_cm = offset_y / pxlPercm
                         in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
-
-                        if in_center and not data_sent and ser:
-                            try:
-                                msg = f"X:{dist_x_cm:.2f},Y:{dist_y_cm:.2f}\n"
-                                ser.write(msg.encode())
-                                data_sent = True
-                            except Exception as e:
-                                print("[WARN] serial send failed:", e)
-                        elif not in_center:
-                            data_sent = False
                 
                 detection_data = {
                     "timestamp": time.time(),
                     "detected": detected,
                     "in_center": in_center,
-                    "class_id": int(primary.cls[0]) if primary is not None else -1,
                     "class_name": lab if detected else "Unknown",
                     "confidence_now": conf_val,
                     "stable_confidence": stable_conf if stable_conf is not None else 0.0,
-                    "center": { #pixel
-                        "x": obj_cx if obj_cx is not None else 0,
-                        "y": obj_cy if obj_cy is not None else 0
-                    },
-                    "bbox": {
-                        "x1": x1,
-                        "y1": y1,
-                        "x2": x2,
-                        "y2": y2
-                    },
+                    "center": {"x": obj_cx, "y": obj_cy},
+                    "bbox": {"x1": x1, "y1": y1, "x2": x2, "y2": y2},
                     "distance": {
                         "x_cm": dist_x_cm,
                         "y_cm": dist_y_cm,
                         "offset_x": int(offset_x) if 'offset_x' in locals() else 0,
                         "offset_y": int(offset_y) if 'offset_y' in locals() else 0
                     },
-                    "frame_info": { #pixel
-                        "width": rot_w,
-                        "height": rot_h,
-                        "margin": margin
-                    }
+                    "frame_info": {"width": rot_w, "height": rot_h, "margin": margin}
                 }
                 try:
                     detection_zmq_q.put_nowait(detection_data)
@@ -450,67 +376,51 @@ def UndistortFrame():
                     pass
             else:
                 bufferConf.clear()
-                center_x = rot_w // 2
-                center_y = rot_h // 2
 
-            center_x = rot_w // 2
-            center_y = rot_h // 2
-            color = (0,255,0) if (locals().get("in_center", False)) else (0,0,255)
             cv2.line(annotated, (center_x, 0), (center_x, rot_h), color, 2)
             cv2.line(annotated, (0, center_y), (rot_w, center_y), color, 2)
             cv2.rectangle(annotated, (center_x - margin, center_y - margin), (center_x + margin, center_y + margin), color, 2)
 
-            if 'obj_cx' in locals() and obj_cx is not None:
-                cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 6, (255,255,0), -1)
+            if obj_cx is not None:
+                cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 6, (255, 255, 0), -1)
 
             txt = f"X:{dist_x_cm:.2f}cm | Y:{dist_y_cm:.2f}cm"
-            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 3, cv2.LINE_AA)
-            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,0,255), 1, cv2.LINE_AA)
+            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 3, cv2.LINE_AA)
+            cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 1, cv2.LINE_AA)
 
+            # Send frame to Android
             frame_counter += 1
             should_send = (frame_counter % SEND_EVERY_N_FRAMES == 0)
             if should_send:
-                display_frame = cv2.resize(annotated, (int(rot_w*0.5), int(rot_h*0.5)), interpolation=cv2.INTER_LINEAR)
+                display_frame = cv2.resize(annotated, (int(rot_w * 0.5), int(rot_h * 0.5)), interpolation=cv2.INTER_LINEAR)
                 try:
                     sender_q.put_nowait(display_frame)
                 except queue.Full:
                     dropped_send_counter += 1
                     if DEBUG and dropped_send_counter % 50 == 0:
-                        print(f"[INFO] sender_q full, dropped frames: {dropped_send_counter}")
+                        print(f"[INFO] sender_q full, dropped: {dropped_send_counter}")
 
+            # Metrics logging
             fps_frame_count += 1
             now = time.time()
             if now - last_log_time >= FPS_LOG_INTERVAL:
                 elapsed = now - last_log_time
                 current_fps = fps_frame_count / elapsed
-                sender_q_size = sender_q.qsize()
-                yolo_q_size = yolo_in_q.qsize()
-                
 
                 with android_ip_lock:
                     target_mode = f"UNICAST ({android_ip})" if android_ip else "BROADCAST"
 
-                print(f"[METRICS] "
-                      f"FPS={current_fps:.1f} | "
-                      f"sent={sent_counter} | "
-                      f"dropped={dropped_send_counter} | "
-                      f"sender_q={sender_q_size} | "
-                      f"yolo_q={yolo_q_size} | "
-                      f"last_data_size={last_sent_size} bytes | "
-                      f"mode={target_mode}")
+                print(f"[METRICS] FPS={current_fps:.1f} | sent={sent_counter} | dropped={dropped_send_counter} | "
+                      f"sender_q={sender_q.qsize()} | yolo_q={yolo_in_q.qsize()} | "
+                      f"data_size={last_sent_size}B | mode={target_mode}")
                 
                 fps_frame_count = 0
                 last_log_time = now
 
-                if sender_q_size == SENDER_QUEUE_MAX:
-                    print("[WARN] sender_q at MAX capacity (bottleneck detected)")
-                if yolo_q_size == yolo_in_q.maxsize:
-                    print("[WARN] yolo_q at MAX capacity")
-
             if DEBUG and SHOW_PREVIEW and (frame_counter % SHOW_EVERY_N_FRAMES == 0):
-                 cv2.imshow("Annotated (high quality)", annotated)
-                 if cv2.waitKey(1) & 0xFF == ord('q'):
-                     break
+                cv2.imshow("Annotated (high quality)", annotated)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
     except KeyboardInterrupt:
         print("[INFO] Terminated by user")
@@ -528,28 +438,22 @@ def UndistortFrame():
             s_thread.join(timeout=SENDER_THREAD_JOIN_TIMEOUT)
         except Exception:
             pass
-        try: 
-            dz_thread.join(timeout=1.0)
-        except Exception:
-            pass
         try:
-            while not sender_q.empty():
-                time.sleep(0.01)
+            dz_thread.join(timeout=1.0)
         except Exception:
             pass
         Camera.release()
         sock.close()
         zmq_socket.close()
         zmq_context.term()
-        if ser and hasattr(ser, "is_open") and ser.is_open:
-            ser.close()
         cv2.destroyAllWindows()
         if DEBUG:
-            print(f"[INFO] sent={sent_counter}, dropped_send={dropped_send_counter}")
+            print(f"[INFO] Final stats - sent={sent_counter}, dropped={dropped_send_counter}")
             with android_ip_lock:
                 if android_ip:
                     print(f"[INFO] Final target: UNICAST to {android_ip}")
                 else:
-                    print(f"[INFO] Final target: BROADCAST (no Android IP received)")
+                    print(f"[INFO] Final target: BROADCAST")
+
 if __name__ == "__main__":
-    UndistortFrame()
+    main()
