@@ -27,7 +27,7 @@ class ZMQRobotServer:
         # ZMQ Setup
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.PULL)
-        self.socket.bind(f"tcp://20.20.20.26:{zmq_port}")
+        self.socket.bind(f"tcp://0.0.0.0:{zmq_port}")
         
         # Serial Setup untuk STM32
         self.ser = None
@@ -46,6 +46,7 @@ class ZMQRobotServer:
         self.preset_num = 0
         self.gripper_state = "OFF"
         self.mode_value = "MANUAL"
+        self.rotate_value = 0  # TAMBAHAN: untuk menyimpan nilai rotate
         
         # Threading
         self.running = False
@@ -104,6 +105,8 @@ class ZMQRobotServer:
                 data_str = f"GRP,{self.gripper_state}\n"
             elif self.last_command_type == 'mode':
                 data_str = f"MOD,{self.mode_value}\n"
+            elif self.last_command_type == 'rotate':  # TAMBAHAN: handle rotate command
+                data_str = f"ROT,{self.rotate_value}\n"
             else:
                 # Default: motor1 value only
                 data_str = f"{self.motor1_value:.2f}\n"
@@ -158,6 +161,12 @@ class ZMQRobotServer:
             cmd = 0x05
             mode_val = 1 if data['mode'] == 'MANUAL' else 2
             payload = struct.pack('<BB', cmd, mode_val)
+            
+        # TAMBAHAN: Handle rotate command
+        elif cmd_type == 'rotate':
+            # Format: type(1) + rotate_value(1 signed byte) [-5, 0, +5]
+            cmd = 0x06
+            payload = struct.pack('<Bb', cmd, data['rotate'])
         else:
             return b''
         
@@ -219,6 +228,14 @@ class ZMQRobotServer:
                     self.gripper2 = float(parts[1])
                     print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}")
                     self.send_to_stm()
+                    
+            # TAMBAHAN: Handle ROTATE command
+            elif msg.startswith("ROTATE:"):
+                # ROTATE:-5 atau ROTATE:0 atau ROTATE:5
+                self.last_command_type = 'rotate'
+                self.rotate_value = int(msg.split(":")[1])
+                print(f"[ROTATE] Value: {self.rotate_value}")
+                self.send_to_stm()
 
             else:
                 # Numeric data (CSV atau single value)
@@ -302,7 +319,8 @@ class ZMQRobotServer:
         return {
             'mode': self.mode.name,
             'motor1': self.motor1_value,
-            'serial_connected': self.serial_connected
+            'serial_connected': self.serial_connected,
+            'rotate': self.rotate_value  # TAMBAHAN
         }
 
 
@@ -310,7 +328,7 @@ class ZMQRobotServer:
 if __name__ == "__main__":
     # Konfigurasi
     ZMQ_PORT = 6000  # Port yang sama dengan Android
-    SERIAL_PORT = 'COM6'  # Sesuaikan dengan port STM32 Anda
+    SERIAL_PORT = 'COM14'  # Sesuaikan dengan port STM32 Anda
     # Linux: '/dev/ttyUSB0' atau '/dev/ttyACM0'
     # Windows: 'COM3', 'COM4', dll
     BAUD_RATE = 115200
