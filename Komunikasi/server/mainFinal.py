@@ -35,7 +35,7 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'best.pt'
+model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best.pt'
 yml_File = r'Calibration_Matrix copy.yaml'
 
 # Camera Config
@@ -97,6 +97,8 @@ class IntegratedRobotServer:
         self.mode = RobotMode.MANUAL
         self.android_ip = None
         self.android_ip_lock = threading.Lock()
+        self.priority_team = "KFS-Blue"  # Default priority: Blue team
+        self.priority_lock = threading.Lock()
         
         # Command state
         self.last_command_type = None
@@ -119,7 +121,7 @@ class IntegratedRobotServer:
             self.device = "cpu"
         
         # Camera
-        self.camera = cv2.VideoCapture(0)
+        self.camera = cv2.VideoCapture(2)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, REQ_W)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, REQ_H)
         self.camera.set(cv2.CAP_PROP_FPS, FPS)
@@ -268,6 +270,19 @@ class IntegratedRobotServer:
                 self.rotate_value = int(msg.split(":")[1])
                 print(f"[ROTATE] Value: {self.rotate_value}")
                 self.send_to_stm()
+            
+            elif msg.startswith("TEAM:"):
+                # TEAM:KFS-Blue atau TEAM:KFS-Red
+                team = msg.split(":", 1)[1]
+                with self.priority_lock:
+                    old_team = self.priority_team
+                    self.priority_team = team
+                
+                if old_team != team:
+                    print(f"\n{'='*60}")
+                    print(f"[TEAM] 🎯 Priority changed: {self.priority_team}")
+                    print(f"[TEAM] Detection will prioritize: {team}")
+                    print(f"{'='*60}\n")
             
             else:
                 # Numeric data
@@ -478,15 +493,28 @@ class IntegratedRobotServer:
                         elif label == "KFS-Red":
                             red_boxes.append(b)
                     
-                    # Priority: Blue > Red
+                    # Priority: Berdasarkan team selection dari Android
                     selected_target = None
                     
-                    if len(blue_boxes) > 0:
-                        selected_target = max(blue_boxes, key=lambda b: float(b.conf[0]))
-                        lab = "KFS-Blue"
-                    elif len(red_boxes) > 0:
-                        selected_target = max(red_boxes, key=lambda b: float(b.conf[0]))
-                        lab = "KFS-Red"
+                    with self.priority_lock:
+                        current_priority = self.priority_team
+                    
+                    if current_priority == "KFS-Blue":
+                        # Blue Team: Prioritas Blue > Red
+                        if len(blue_boxes) > 0:
+                            selected_target = max(blue_boxes, key=lambda b: float(b.conf[0]))
+                            lab = "KFS-Blue"
+                        elif len(red_boxes) > 0:
+                            selected_target = max(red_boxes, key=lambda b: float(b.conf[0]))
+                            lab = "KFS-Red"
+                    else:
+                        # Red Team: Prioritas Red > Blue
+                        if len(red_boxes) > 0:
+                            selected_target = max(red_boxes, key=lambda b: float(b.conf[0]))
+                            lab = "KFS-Red"
+                        elif len(blue_boxes) > 0:
+                            selected_target = max(blue_boxes, key=lambda b: float(b.conf[0]))
+                            lab = "KFS-Blue"
                     
                     # Draw all boxes
                     for b in filtered_boxes:
