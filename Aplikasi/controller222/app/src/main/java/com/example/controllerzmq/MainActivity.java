@@ -66,6 +66,9 @@ public class MainActivity extends AppCompatActivity {
     private boolean isManualMode = true;
     private boolean isGripping = false;
     private boolean isReceiverRunning = false;
+    private boolean preset1Active = false;
+    private boolean preset2Active = false;
+
 
     private String serverIp = "10.107.137.167";
     private int serverPort = 6000;
@@ -288,21 +291,23 @@ public class MainActivity extends AppCompatActivity {
         isGripping = !isGripping;
 
         if (isGripping) {
+            // ON
             btnGripper.setText("GRIPPING");
             btnGripper.setBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
-            sendGripperCommand("GRIP_ON");
+            sendGripperCommand(1);
             Toast.makeText(this, "Gripper Activated", Toast.LENGTH_SHORT).show();
         } else {
+            // OFF
             btnGripper.setText("GRIPPER");
             btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
-            sendGripperCommand("GRIP_OFF");
+            sendGripperCommand(0);
             Toast.makeText(this, "Gripper Released", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void sendGripperCommand(String command) {
+    private void sendGripperCommand(int value) {
         if (socket != null && isConnected && isManualMode) {
-            String msg = "GRIPPER:" + command;
+            String msg = "GRIPPER:" + value;
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent gripper command: " + msg);
         }
@@ -311,20 +316,36 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupPresetButtons() {
         preset1.setOnClickListener(v -> {
-            if (isConnected) {
-                sendPresetCommand(1);
+            if (!isConnected) {
+                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!preset1Active) {
+                sendPresetCommand(1);   // ON
+                preset1Active = true;
                 Toast.makeText(this, "Preset 1 activated", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+                sendPresetCommand(0);   // OFF
+                preset1Active = false;
+                Toast.makeText(this, "Preset 1 deactivated", Toast.LENGTH_SHORT).show();
             }
         });
 
         preset2.setOnClickListener(v -> {
-            if (isConnected) {
+            if (!isConnected) {
+                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (!preset2Active) {
                 sendPresetCommand(2);
+                preset2Active = true;
                 Toast.makeText(this, "Preset 2 activated", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+                sendPresetCommand(0);
+                preset2Active = false;
+                Toast.makeText(this, "Preset 2 deactivated", Toast.LENGTH_SHORT).show();
             }
         });
     }
