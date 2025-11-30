@@ -35,8 +35,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
+model_path = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Komunikasi\server\best (1).pt'
+yml_File = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -559,51 +559,48 @@ class IntegratedRobotServer:
                     
                     # Process selected target
                     if selected_target is not None:
-                        with self.priority_lock:
-                            current_priority = self.priority_team
-                        if lab == current_priority:
-                            x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
+                        x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
+                    
+                        scaled_x1 = x1 * sx
+                        scaled_y1 = y1 * sy
+                        scaled_x2 = x2 * sx
+                        scaled_y2 = y2 * sy
+                    
+                        box_width = scaled_x2 - scaled_x1
+                        box_height = scaled_y2 - scaled_y1
+                    
+                        indicator_size = margin * 2
+                    
+                        width_diff = abs(box_width - indicator_size) / indicator_size * 100
+                        height_diff = abs(box_height - indicator_size) / indicator_size * 100
+                        avg_diff = (width_diff + height_diff) / 2
+                    
+                        if avg_diff < 35:
+                            color = (0, 255, 0)
+                        elif avg_diff < 50:
+                            color = (0, 255, 255)
+                        else:
+                            color = (0, 0, 255)
+                    
+                        cx_small = (x1 + x2) / 2.0
+                        cy_small = (y1 + y2) / 2.0
+                    
+                        obj_cx = int(cx_small * sx)
+                        obj_cy = int(cy_small * sy)
+                        conf_val = float(selected_target.conf[0])
+                        self.buffer_conf.append(conf_val)
+                    
+                        if len(self.buffer_conf) == self.buffer_conf.maxlen:
+                            stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
+                    
+                        if stable_conf is not None and stable_conf > CONF_THRESHOLD:
+                            detected = True
+                            offset_x = obj_cx - center_x
+                            offset_y = obj_cy - center_y
                         
-                            scaled_x1 = x1 * sx
-                            scaled_y1 = y1 * sy
-                            scaled_x2 = x2 * sx
-                            scaled_y2 = y2 * sy
-                        
-                            box_width = scaled_x2 - scaled_x1
-                            box_height = scaled_y2 - scaled_y1
-                        
-                            indicator_size = margin * 2
-                        
-                            width_diff = abs(box_width - indicator_size) / indicator_size * 100
-                            height_diff = abs(box_height - indicator_size) / indicator_size * 100
-                            avg_diff = (width_diff + height_diff) / 2
-                        
-                            if avg_diff < 35:
-                                color = (0, 255, 0)
-                            elif avg_diff < 50:
-                                color = (0, 255, 255)
-                            else:
-                                color = (0, 0, 255)
-                        
-                            cx_small = (x1 + x2) / 2.0
-                            cy_small = (y1 + y2) / 2.0
-                        
-                            obj_cx = int(cx_small * sx)
-                            obj_cy = int(cy_small * sy)
-                            conf_val = float(selected_target.conf[0])
-                            self.buffer_conf.append(conf_val)
-                        
-                            if len(self.buffer_conf) == self.buffer_conf.maxlen:
-                                stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
-                        
-                            if stable_conf is not None and stable_conf > CONF_THRESHOLD:
-                                detected = True
-                                offset_x = obj_cx - center_x
-                                offset_y = obj_cy - center_y
-                            
-                                dist_x_cm = offset_x / pxlPercm
-                                dist_y_cm = offset_y / pxlPercm
-                                in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
+                            dist_x_cm = offset_x / pxlPercm
+                            dist_y_cm = offset_y / pxlPercm
+                            in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
                 else:
                     self.buffer_conf.clear()
                     
