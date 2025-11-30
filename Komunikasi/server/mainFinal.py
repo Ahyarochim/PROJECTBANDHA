@@ -35,8 +35,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Calibration_Matrix.yaml'
+model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best (1).pt'
+yml_File = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -116,10 +116,12 @@ class IntegratedRobotServer:
         # counters (frame-based)
         self.yellow_stable_count = 0
         self.green_stable_count  = 0
+        self.red_stable_count    = 0  # NEW: counter untuk RED indicator
 
         # threshold (frame counts)
         self.YELLOW_STABLE_FRAMES = 10    
-        self.GREEN_STABLE_FRAMES  = 18    
+        self.GREEN_STABLE_FRAMES  = 18
+        self.RED_STABLE_FRAMES    = 15    # NEW: 15 frames red sebelum maju
 
         # cooldown setelah ambil (detik)
         self.post_pickup_pause = 60      
@@ -127,6 +129,22 @@ class IntegratedRobotServer:
 
         # enable auto-grip hanya di mode AUTONOMOUS
         self.auto_grip_enabled = True
+        
+        # NEW: Flags untuk prevent repeated commands
+        self.gripper_down_sent = False    # Flag: sudah kirim GRD,DOWN?
+        self.move_forward_sent = False    # Flag: sudah kirim MOVE_FORWARD?
+        
+        # NEW: Yellow state machine untuk multi-step process
+        # States: None, 'STOPPING', 'LOWERING', 'WAITING', 'MOVING'
+        self.yellow_state = None
+        self.yellow_state_timestamp = 0.0
+        self.YELLOW_WAIT_TIME = 10.0  # Wait 10 seconds after lowering gripper
+        
+        # NEW: Green state machine untuk delay sebelum grip
+        # States: None, 'WAITING', 'GRIPPING'
+        self.green_state = None
+        self.green_state_timestamp = 0.0
+        self.GREEN_WAIT_TIME = 3.0  # Wait 3 seconds before gripping
 
         
         # ==== Vision / YOLO ====
@@ -218,6 +236,12 @@ class IntegratedRobotServer:
                 data_str = "1\n"
             elif self.last_command_type == 'gripper_off':
                 data_str = "0\n"
+            elif self.last_command_type == 'move_forward':
+                # NEW: Command untuk maju saat RED indicator
+                data_str = "MVF,FORWARD\n"
+            elif self.last_command_type == 'stop':
+                # NEW: Command untuk STOP robot
+                data_str = "STP,STOP\n"
             else:
                 data_str = f"{self.motor1_value:.2f}\n"
             
@@ -609,61 +633,152 @@ class IntegratedRobotServer:
                 if now < self.pickup_cooldown_until:
                     self.yellow_stable_count = 0
                     self.green_stable_count  = 0
+                    self.red_stable_count    = 0
+                    self.yellow_state = None  # Reset yellow state
+                    self.green_state = None   # Reset green state
                     cv2.putText(annotated, f"COOLDOWN {int(self.pickup_cooldown_until - now)}s", (20,20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 2)
                 else:
                     with self.priority_lock:
                         current_priority = self.priority_team
     
-    # Cek mode: harus AUTONOMOUS (dari Android dikirim sebagai string)
-                is_autonomous = (self.mode_value == "AUTONOMOUS")
+    # Cek mode: harus AUTO (dari Android dikirim sebagai "MODE:AUTO")
+                is_autonomous = (self.mode_value == "AUTO")
     
                 if self.auto_grip_enabled and is_autonomous and detected and lab == current_priority:
+                    # GREEN INDICATOR LOGIC (WITH DELAY BEFORE GRIP)
                     if color == (0, 255, 0):
                         self.green_stable_count += 1
                         self.yellow_stable_count = 0
-                        if DEBUG:
+                        self.red_stable_count = 0
+                        # Reset flags karena sudah hijau
+                        self.gripper_down_sent = False
+                        self.move_forward_sent = False
+                        
+                        # Hanya print di milestone frames (5, 10, 15, 18) untuk mengurangi spam
+                        if DEBUG and (self.green_stable_count % 10 == 0 or self.green_stable_count == self.GREEN_STABLE_FRAMES):
                             print(f"[AUTO-GRIP] 🟢 GREEN indicator stable: {self.green_stable_count}/{self.GREEN_STABLE_FRAMES} frames")
 
-            # ketika stabil cukup lama -> kirim GRIPPER ON
+                        # ketika stabil cukup lama -> mulai state machine
                         if self.green_stable_count >= self.GREEN_STABLE_FRAMES:
-                            self.last_command_type = 'gripper_on'
-                            self.gripper_state = "ON"
-                            sent = self.send_to_stm()
-                
-                            print(f"\n{'='*60}")
-                            print(f"[AUTO-GRIP] ✅ GRIPPER ON SENT!")
-                            print(f"[AUTO-GRIP] Success: {sent}")
-                            print(f"[AUTO-GRIP] Green frames: {self.green_stable_count}")
-                            print(f"{'='*60}\n")
-                            self.pickup_cooldown_until = now + self.post_pickup_pause
-                # reset counters
-                            self.green_stable_count = 0
-                            self.yellow_stable_count = 0
-                
-                elif color == (0, 255, 255):
-                    self.yellow_stable_count += 1
-                    self.green_stable_count = 0
-                    if DEBUG:
-                        print(f"[AUTO-GRIP] 🟡 YELLOW indicator stable: {self.yellow_stable_count}/{self.YELLOW_STABLE_FRAMES} frames")
+                            # State 1: WAITING (tunggu 3 detik)
+                            if self.green_state is None:
+                                self.green_state = 'WAITING'
+                                self.green_state_timestamp = now
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] ⏳ GREEN STABLE! Waiting {self.GREEN_WAIT_TIME}s before grip...")
+                                print(f"[AUTO-GRIP] Green frames: {self.green_stable_count}")
+                                print(f"{'='*60}\n")
+                            
+                            # State 2: GRIPPING (setelah 3 detik)
+                            elif self.green_state == 'WAITING' and (now - self.green_state_timestamp) >= self.GREEN_WAIT_TIME:
+                                self.last_command_type = 'gripper_on'
+                                self.gripper_state = "ON"
+                                sent = self.send_to_stm()
+                                self.green_state = 'GRIPPING'
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] ✅ GRIPPER ON SENT!")
+                                print(f"[AUTO-GRIP] Success: {sent}")
+                                print(f"[AUTO-GRIP] Wait time: {self.GREEN_WAIT_TIME}s")
+                                print(f"{'='*60}\n")
+                                
+                                # Set cooldown dan reset
+                                self.pickup_cooldown_until = now + self.post_pickup_pause
+                                self.green_stable_count = 0
+                                self.yellow_stable_count = 0
+                                self.red_stable_count = 0
+                                self.yellow_state = None
+                                self.green_state = None
+                    
+                    # YELLOW INDICATOR LOGIC (MULTI-STEP STATE MACHINE)
+                    elif color == (0, 255, 255):
+                        self.yellow_stable_count += 1
+                        self.green_stable_count = 0
+                        self.red_stable_count = 0
+                        self.move_forward_sent = False  # Reset move forward flag
+                        
+                        # Hanya print di milestone frames (5, 10) untuk mengurangi spam
+                        if DEBUG and (self.yellow_stable_count % 5 == 0 or self.yellow_stable_count == self.YELLOW_STABLE_FRAMES):
+                            print(f"[AUTO-GRIP] 🟡 YELLOW indicator stable: {self.yellow_stable_count}/{self.YELLOW_STABLE_FRAMES} frames")
+                        
+                        # Saat yellow stabil, jalankan state machine
                         if self.yellow_stable_count >= self.YELLOW_STABLE_FRAMES:
-                            self.last_command_type = 'gripper_down'
-                            sent = self.send_to_stm()
-                
-                            print(f"\n{'='*60}")
-                            print(f"[AUTO-GRIP] ⬇️ GRIPPER DOWN SENT!")
-                            print(f"[AUTO-GRIP] Success: {sent}")
-                            print(f"[AUTO-GRIP] Yellow frames: {self.yellow_stable_count}")
-                            print(f"{'='*60}\n")
-                            self.yellow_stable_count = 0
-                    else:
-                        if self.yellow_stable_count > 0 or self.green_stable_count > 0:
-                            if DEBUG:
-                                print(f"[AUTO-GRIP] 🔴 RED indicator - counters reset")
+                            # State 1: STOPPING
+                            if self.yellow_state is None:
+                                self.last_command_type = 'stop'
+                                sent = self.send_to_stm()
+                                self.yellow_state = 'STOPPING'
+                                self.yellow_state_timestamp = now
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] 🛑 STOP SENT! (Step 1/4)")
+                                print(f"[AUTO-GRIP] Success: {sent}")
+                                print(f"{'='*60}\n")
+                            
+                            # State 2: LOWERING GRIPPER (setelah 0.5 detik stop)
+                            elif self.yellow_state == 'STOPPING' and (now - self.yellow_state_timestamp) >= 0.5:
+                                self.last_command_type = 'gripper_down'
+                                sent = self.send_to_stm()
+                                self.yellow_state = 'LOWERING'
+                                self.yellow_state_timestamp = now
+                                self.gripper_down_sent = True
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] ⬇️ GRIPPER DOWN SENT! (Step 2/4)")
+                                print(f"[AUTO-GRIP] Success: {sent}")
+                                print(f"{'='*60}\n")
+                            
+                            # State 3: WAITING (tunggu gripper turun)
+                            elif self.yellow_state == 'LOWERING' and (now - self.yellow_state_timestamp) >= self.YELLOW_WAIT_TIME:
+                                self.yellow_state = 'WAITING'
+                                self.yellow_state_timestamp = now
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] ⏳ WAITING COMPLETE (Step 3/4)")
+                                print(f"[AUTO-GRIP] Wait time: {self.YELLOW_WAIT_TIME}s")
+                                print(f"{'='*60}\n")
+                            
+                            # State 4: MOVING FORWARD (lanjut ke hijau)
+                            elif self.yellow_state == 'WAITING':
+                                self.last_command_type = 'move_forward'
+                                sent = self.send_to_stm()
+                                self.yellow_state = 'MOVING'
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] ➡️ MOVE FORWARD SENT! (Step 4/4)")
+                                print(f"[AUTO-GRIP] Success: {sent}")
+                                print(f"[AUTO-GRIP] Target: GREEN indicator")
+                                print(f"{'='*60}\n")
+                    
+                    # RED INDICATOR LOGIC
+                    else:  # color == (0, 0, 255) - RED
+                        self.red_stable_count += 1
                         self.yellow_stable_count = 0
-                        self.green_stable_count  = 0
+                        self.green_stable_count = 0
+                        self.gripper_down_sent = False  # Reset gripper down flag
+                        self.yellow_state = None  # Reset yellow state saat kembali ke red
+                        
+                        # Hanya print di milestone frames (5, 10, 15) untuk mengurangi spam
+                        if DEBUG and (self.red_stable_count % 5 == 0 or self.red_stable_count == self.RED_STABLE_FRAMES):
+                            print(f"[AUTO-GRIP] 🔴 RED indicator stable: {self.red_stable_count}/{self.RED_STABLE_FRAMES} frames")
+                        
+                        # NEW: Kirim command MAJU saat RED stabil
+                        if self.red_stable_count >= self.RED_STABLE_FRAMES and not self.move_forward_sent:
+                            self.last_command_type = 'move_forward'
+                            sent = self.send_to_stm()
+                            self.move_forward_sent = True  # Set flag agar tidak repeat
+                            
+                            print(f"\n{'='*60}")
+                            print(f"[AUTO-GRIP] ➡️ MOVE FORWARD SENT! (ONCE)")
+                            print(f"[AUTO-GRIP] Success: {sent}")
+                            print(f"[AUTO-GRIP] Red frames: {self.red_stable_count}")
+                            print(f"[AUTO-GRIP] Target: YELLOW indicator")
+                            print(f"{'='*60}\n")
                 else:
-                        if self.yellow_stable_count > 0 or self.green_stable_count > 0:
+                        # Reset semua counter jika kondisi tidak terpenuhi
+                        if self.yellow_stable_count > 0 or self.green_stable_count > 0 or self.red_stable_count > 0:
                             if DEBUG:
                                 reason = []
                                 if not is_autonomous:
@@ -676,6 +791,11 @@ class IntegratedRobotServer:
         
                         self.yellow_stable_count = 0
                         self.green_stable_count  = 0
+                        self.red_stable_count    = 0
+                        self.gripper_down_sent   = False
+                        self.move_forward_sent   = False
+                        self.yellow_state        = None  # Reset yellow state
+                        self.green_state         = None  # Reset green state
                 
                 # Draw crosshair
                 cv2.line(annotated, (center_x, 0), (center_x, rot_h), color, 2)
