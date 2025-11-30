@@ -111,6 +111,23 @@ class IntegratedRobotServer:
         self.mode_value = "MANUAL"
         self.rotate_value = 0
         self.motor1_value = 0.0
+
+        #==== Auto-Grip State ====
+        # counters (frame-based)
+        self.yellow_stable_count = 0
+        self.green_stable_count  = 0
+
+        # threshold (frame counts)
+        self.YELLOW_STABLE_FRAMES = 10    
+        self.GREEN_STABLE_FRAMES  = 18    
+
+        # cooldown setelah ambil (detik)
+        self.post_pickup_pause = 60      
+        self.pickup_cooldown_until = 0.0
+
+        # enable auto-grip hanya di mode AUTONOMOUS
+        self.auto_grip_enabled = True
+
         
         # ==== Vision / YOLO ====
         self.yolo_model = YOLO(model_path)
@@ -131,20 +148,16 @@ class IntegratedRobotServer:
             print("[ERROR] Kamera tidak bisa dibuka!")
             sys.exit(1)
         
-        # Detection buffer
+
         self.buffer_conf = deque(maxlen=5)
         
-        # Threading control
         self.running = False
         
         print(f"[INIT] Integrated Robot Server initialized")
         print(f"[INIT] ZMQ Port: {ZMQ_PORT}")
         print(f"[INIT] Serial: {SERIAL_PORT}")
         print(f"[INIT] YOLO Device: {self.device}")
-    
-    # ========================
-    # SERIAL COMMUNICATION
-    # ========================
+
     def connect_serial(self):
         """Connect to STM32 via Serial"""
         try:
@@ -199,6 +212,12 @@ class IntegratedRobotServer:
                 data_str = f"MOD,{self.mode_value}\n"
             elif self.last_command_type == 'rotate':
                 data_str = f"ROT,{self.rotate_value}\n"
+            elif self.last_command_type == 'gripper_down':
+                data_str = "GRD,DOWN\n"
+            elif self.last_command_type == 'gripper_on':
+                data_str = "GRP,ON\n"
+            elif self.last_command_type == 'gripper_off':
+                data_str = "GRP,OFF\n"
             else:
                 data_str = f"{self.motor1_value:.2f}\n"
             
@@ -587,6 +606,58 @@ class IntegratedRobotServer:
                             in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
                 else:
                     self.buffer_conf.clear()
+                now = time.time()
+
+                if now < self.pickup_cooldown_until:
+                    self.yellow_stable_count = 0
+                    self.green_stable_count  = 0
+                    cv2.putText(annotated, f"COOLDOWN {int(self.pickup_cooldown_until - now)}s", (20,20),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 2)
+                else:
+                    # Hanya jalankan auto-grip di mode AUTONOMOUS dan jika enabled
+                    if self.auto_grip_enabled and self.mode == RobotMode.AUTONOMOUS and detected and lab == current_priority:
+                        # Tentukan indikator berdasar color variabel
+                        # color (0,255,0) = hijau, (0,255,255) = kuning, (0,0,255) = merah
+                        if color == (0, 255, 0):
+                            # HIJAU
+                            self.green_stable_count += 1
+                            self.yellow_stable_count = 0
+
+                            # ketika stabil cukup lama -> kirim GRIPPER ON
+                            if self.green_stable_count >= self.GREEN_STABLE_FRAMES:
+                                # Kirim perintah grip ON
+                                self.last_command_type = 'gripper_on'
+                                # keep gripper_state consistent (optional)
+                                self.gripper_state = "ON"
+                                sent = self.send_to_stm()
+                                if DEBUG:
+                                    print(f"[AUTO-GRIP] GRIPPER ON sent: {sent} (stable {self.green_stable_count} frames)")
+                                # masuk cooldown agar tidak ambil berulang
+                                self.pickup_cooldown_until = now + self.post_pickup_pause
+                                # reset counters
+                                self.green_stable_count = 0
+                                self.yellow_stable_count = 0
+                        elif color == (0, 255, 255):
+                            # KUNING: turunkan gripper jika stabil
+                            self.yellow_stable_count += 1
+                            self.green_stable_count = 0
+
+                            if self.yellow_stable_count >= self.YELLOW_STABLE_FRAMES:
+                                # Kirim perintah gripper turun
+                                self.last_command_type = 'gripper_down'
+                                sent = self.send_to_stm()
+                                if DEBUG:
+                                    print(f"[AUTO-GRIP] GRIPPER DOWN sent: {sent} (stable {self.yellow_stable_count} frames)")
+                                # reset kuning counter agar tidak spam
+                                self.yellow_stable_count = 0
+                        else:
+                            # MERAH: reset semua counters
+                            self.yellow_stable_count = 0
+                            self.green_stable_count  = 0
+                    else:
+                        # Kalau tidak di AUTONOMOUS atau tidak terdeteksi -> reset counter
+                        self.yellow_stable_count = 0
+                        self.green_stable_count  = 0
                 
                 # Draw crosshair
                 cv2.line(annotated, (center_x, 0), (center_x, rot_h), color, 2)
