@@ -215,9 +215,9 @@ class IntegratedRobotServer:
             elif self.last_command_type == 'gripper_down':
                 data_str = "GRD,DOWN\n"
             elif self.last_command_type == 'gripper_on':
-                data_str = "GRP,ON\n"
+                data_str = "1\n"
             elif self.last_command_type == 'gripper_off':
-                data_str = "GRP,OFF\n"
+                data_str = "0\n"
             else:
                 data_str = f"{self.motor1_value:.2f}\n"
             
@@ -264,7 +264,7 @@ class IntegratedRobotServer:
             elif msg.startswith("GRIPPER:"):
                 self.last_command_type = 'gripper_toggle'
                 state = msg.split(":")[1]
-                self.gripper_state = "ON" if state == "GRIP_ON" else "OFF"
+                self.gripper_state = "1" if state == "GRIP_ON" else "0"
                 print(f"[GRIPPER] State: {self.gripper_state}")
                 self.send_to_stm()
             
@@ -578,84 +578,105 @@ class IntegratedRobotServer:
                             height_diff = abs(box_height - indicator_size) / indicator_size * 100
                             avg_diff = (width_diff + height_diff) / 2
                         
-                        if avg_diff < 35:
-                            color = (0, 255, 0)
-                        elif avg_diff < 50:
-                            color = (0, 255, 255)
-                        else:
-                            color = (0, 0, 255)
+                            if avg_diff < 35:
+                                color = (0, 255, 0)
+                            elif avg_diff < 50:
+                                color = (0, 255, 255)
+                            else:
+                                color = (0, 0, 255)
                         
-                        cx_small = (x1 + x2) / 2.0
-                        cy_small = (y1 + y2) / 2.0
+                            cx_small = (x1 + x2) / 2.0
+                            cy_small = (y1 + y2) / 2.0
                         
-                        obj_cx = int(cx_small * sx)
-                        obj_cy = int(cy_small * sy)
-                        conf_val = float(selected_target.conf[0])
-                        self.buffer_conf.append(conf_val)
+                            obj_cx = int(cx_small * sx)
+                            obj_cy = int(cy_small * sy)
+                            conf_val = float(selected_target.conf[0])
+                            self.buffer_conf.append(conf_val)
                         
-                        if len(self.buffer_conf) == self.buffer_conf.maxlen:
-                            stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
+                            if len(self.buffer_conf) == self.buffer_conf.maxlen:
+                                stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
                         
-                        if stable_conf is not None and stable_conf > CONF_THRESHOLD:
-                            detected = True
-                            offset_x = obj_cx - center_x
-                            offset_y = obj_cy - center_y
+                            if stable_conf is not None and stable_conf > CONF_THRESHOLD:
+                                detected = True
+                                offset_x = obj_cx - center_x
+                                offset_y = obj_cy - center_y
                             
-                            dist_x_cm = offset_x / pxlPercm
-                            dist_y_cm = offset_y / pxlPercm
-                            in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
+                                dist_x_cm = offset_x / pxlPercm
+                                dist_y_cm = offset_y / pxlPercm
+                                in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
                 else:
                     self.buffer_conf.clear()
+                    
                 now = time.time()
 
                 if now < self.pickup_cooldown_until:
                     self.yellow_stable_count = 0
                     self.green_stable_count  = 0
                     cv2.putText(annotated, f"COOLDOWN {int(self.pickup_cooldown_until - now)}s", (20,20),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 2)
                 else:
-                    # Hanya jalankan auto-grip di mode AUTONOMOUS dan jika enabled
-                    if self.auto_grip_enabled and self.mode == RobotMode.AUTONOMOUS and detected and lab == current_priority:
-                        # Tentukan indikator berdasar color variabel
-                        # color (0,255,0) = hijau, (0,255,255) = kuning, (0,0,255) = merah
-                        if color == (0, 255, 0):
-                            # HIJAU
-                            self.green_stable_count += 1
-                            self.yellow_stable_count = 0
+                    with self.priority_lock:
+                        current_priority = self.priority_team
+    
+    # Cek mode: harus AUTONOMOUS (dari Android dikirim sebagai string)
+                is_autonomous = (self.mode_value == "AUTONOMOUS")
+    
+                if self.auto_grip_enabled and is_autonomous and detected and lab == current_priority:
+                    if color == (0, 255, 0):
+                        self.green_stable_count += 1
+                        self.yellow_stable_count = 0
+                        if DEBUG:
+                            print(f"[AUTO-GRIP] 🟢 GREEN indicator stable: {self.green_stable_count}/{self.GREEN_STABLE_FRAMES} frames")
 
-                            # ketika stabil cukup lama -> kirim GRIPPER ON
-                            if self.green_stable_count >= self.GREEN_STABLE_FRAMES:
-                                # Kirim perintah grip ON
-                                self.last_command_type = 'gripper_on'
-                                # keep gripper_state consistent (optional)
-                                self.gripper_state = "ON"
-                                sent = self.send_to_stm()
-                                if DEBUG:
-                                    print(f"[AUTO-GRIP] GRIPPER ON sent: {sent} (stable {self.green_stable_count} frames)")
-                                # masuk cooldown agar tidak ambil berulang
-                                self.pickup_cooldown_until = now + self.post_pickup_pause
-                                # reset counters
-                                self.green_stable_count = 0
-                                self.yellow_stable_count = 0
-                        elif color == (0, 255, 255):
-                            # KUNING: turunkan gripper jika stabil
-                            self.yellow_stable_count += 1
+            # ketika stabil cukup lama -> kirim GRIPPER ON
+                        if self.green_stable_count >= self.GREEN_STABLE_FRAMES:
+                            self.last_command_type = 'gripper_on'
+                            self.gripper_state = "ON"
+                            sent = self.send_to_stm()
+                
+                            print(f"\n{'='*60}")
+                            print(f"[AUTO-GRIP] ✅ GRIPPER ON SENT!")
+                            print(f"[AUTO-GRIP] Success: {sent}")
+                            print(f"[AUTO-GRIP] Green frames: {self.green_stable_count}")
+                            print(f"{'='*60}\n")
+                            self.pickup_cooldown_until = now + self.post_pickup_pause
+                # reset counters
                             self.green_stable_count = 0
-
-                            if self.yellow_stable_count >= self.YELLOW_STABLE_FRAMES:
-                                # Kirim perintah gripper turun
-                                self.last_command_type = 'gripper_down'
-                                sent = self.send_to_stm()
-                                if DEBUG:
-                                    print(f"[AUTO-GRIP] GRIPPER DOWN sent: {sent} (stable {self.yellow_stable_count} frames)")
-                                # reset kuning counter agar tidak spam
-                                self.yellow_stable_count = 0
-                        else:
-                            # MERAH: reset semua counters
                             self.yellow_stable_count = 0
-                            self.green_stable_count  = 0
+                
+                elif color == (0, 255, 255):
+                    self.yellow_stable_count += 1
+                    self.green_stable_count = 0
+                    if DEBUG:
+                        print(f"[AUTO-GRIP] 🟡 YELLOW indicator stable: {self.yellow_stable_count}/{self.YELLOW_STABLE_FRAMES} frames")
+                        if self.yellow_stable_count >= self.YELLOW_STABLE_FRAMES:
+                            self.last_command_type = 'gripper_down'
+                            sent = self.send_to_stm()
+                
+                            print(f"\n{'='*60}")
+                            print(f"[AUTO-GRIP] ⬇️ GRIPPER DOWN SENT!")
+                            print(f"[AUTO-GRIP] Success: {sent}")
+                            print(f"[AUTO-GRIP] Yellow frames: {self.yellow_stable_count}")
+                            print(f"{'='*60}\n")
+                            self.yellow_stable_count = 0
                     else:
-                        # Kalau tidak di AUTONOMOUS atau tidak terdeteksi -> reset counter
+                        if self.yellow_stable_count > 0 or self.green_stable_count > 0:
+                            if DEBUG:
+                                print(f"[AUTO-GRIP] 🔴 RED indicator - counters reset")
+                        self.yellow_stable_count = 0
+                        self.green_stable_count  = 0
+                else:
+                        if self.yellow_stable_count > 0 or self.green_stable_count > 0:
+                            if DEBUG:
+                                reason = []
+                                if not is_autonomous:
+                                    reason.append("NOT AUTONOMOUS")
+                                if not detected:
+                                    reason.append("NO DETECTION")
+                                if lab != current_priority:
+                                    reason.append(f"WRONG TEAM ({lab} != {current_priority})")
+                                print(f"[AUTO-GRIP] ⚠️ Counters reset: {', '.join(reason)}")
+        
                         self.yellow_stable_count = 0
                         self.green_stable_count  = 0
                 
@@ -696,8 +717,6 @@ class IntegratedRobotServer:
                     
                     fps_frame_count = 0
                     last_log_time = now
-                
-                # Preview
                 if DEBUG and SHOW_PREVIEW and (frame_counter % SHOW_EVERY_N_FRAMES == 0):
                     cv2.imshow("Annotated", annotated)
                     if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -758,10 +777,6 @@ class IntegratedRobotServer:
         self.zmq_context.term()
         
         print("[SERVER] Stopped")
-
-# ========================
-# MAIN
-# ========================
 if __name__ == "__main__":
     print("="*60)
     print("INTEGRATED ROBOT SERVER")
