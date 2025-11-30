@@ -28,15 +28,15 @@ class RobotMode(Enum):
     AUTONOMOUS = 2
 
 # Serial Config
-SERIAL_PORT = '/dev/ttyACM0'  # Sesuaikan: Linux: '/dev/ttyACM0', Windows: 'COM3'
+SERIAL_PORT = 'COM3'  # Sesuaikan: Linux: '/dev/ttyACM0', Windows: 'COM3'
 BAUD_RATE = 115200
 
 # ZMQ Config
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best.pt'
-yml_File = r'Calibration_Matrix copy.yaml'
+model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
+yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -60,6 +60,85 @@ BRIGHTNESS_FACTOR = 1.5
 
 DEBUG = True
 USE_UNDISTORT = False
+
+# ========================
+# DETECTION STATE MACHINE
+# ========================
+class DetectionState:
+    """State machine untuk autonomous grip sequence"""
+    def __init__(self):
+        self.state = "IDLE"
+        self.color = "RED"
+        self.yellow_counter = 0
+        self.green_counter = 0
+        self.yellow_threshold = 10
+        self.green_threshold = 18
+        self.cooldown_active = False
+        self.cooldown_start = 0.0
+        self.cooldown_duration = 60.0
+    
+    def reset_counters(self):
+        self.yellow_counter = 0
+        self.green_counter = 0
+    
+    def update_color(self, new_color):
+        if new_color == "RED":
+            self.reset_counters()
+            self.color = "RED"
+        elif new_color == "YELLOW":
+            if self.color != "YELLOW":
+                self.yellow_counter = 0
+            self.color = "YELLOW"
+            self.green_counter = 0
+        elif new_color == "GREEN":
+            if self.color != "GREEN":
+                self.green_counter = 0
+            self.color = "GREEN"
+    
+    def check_cooldown(self):
+        if self.cooldown_active:
+            elapsed = time.time() - self.cooldown_start
+            if elapsed >= self.cooldown_duration:
+                self.cooldown_active = False
+                self.state = "LIFT_WAIT"
+                self.reset_counters()
+                return False
+            return True
+        return False
+    
+    def process_detection(self, detected, color):
+        should_grip_yellow = False
+        should_grip_green = False
+        
+        if self.check_cooldown():
+            return should_grip_yellow, should_grip_green
+        
+        if not detected:
+            self.reset_counters()
+            self.state = "SEARCHING"
+            return should_grip_yellow, should_grip_green
+        
+        self.update_color(color)
+        
+        if self.state in ["IDLE", "SEARCHING", "MOVING"]:
+            if color == "RED":
+                self.state = "SEARCHING"
+            elif color == "YELLOW":
+                self.state = "MOVING"
+                self.yellow_counter += 1
+                if self.yellow_counter >= self.yellow_threshold:
+                    should_grip_yellow = True
+                    self.yellow_counter = 0
+            elif color == "GREEN":
+                self.state = "MOVING"
+                self.green_counter += 1
+                if self.green_counter >= self.green_threshold:
+                    should_grip_green = True
+                    self.green_counter = 0
+                    self.cooldown_active = True
+                    self.cooldown_start = time.time()
+        
+        return should_grip_yellow, should_grip_green
 
 # ========================
 # INTEGRATED SERVER CLASS
@@ -100,17 +179,24 @@ class IntegratedRobotServer:
         self.priority_team = "KFS-Blue"  # Default priority: Blue team
         self.priority_lock = threading.Lock()
         
-        # Command state
+        # ==== Command state ====
         self.last_command_type = None
         self.joystick_x = 0.0
         self.joystick_y = 0.0
         self.gripper1 = 0.0
         self.gripper2 = 0.0
         self.preset_num = 0
-        self.gripper_state = "OFF"
+        self.gripper_state = 0  # 0 = OFF, 1 = ON
         self.mode_value = "MANUAL"
         self.rotate_value = 0
         self.motor1_value = 0.0
+        
+        # ==== Autonomous State Machine ====
+        self.detection_state = DetectionState()
+        self.auto_gripper_sent = False
+        self.auto_grab_sent = False
+        self.lift_g1 = 0.0
+        self.lift_g2 = 0.0
         
         # ==== Vision / YOLO ====
         self.yolo_model = YOLO(model_path)
@@ -121,7 +207,7 @@ class IntegratedRobotServer:
             self.device = "cpu"
         
         # Camera
-        self.camera = cv2.VideoCapture(2)
+        self.camera = cv2.VideoCapture(0)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, REQ_W)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, REQ_H)
         self.camera.set(cv2.CAP_PROP_FPS, FPS)
@@ -191,10 +277,23 @@ class IntegratedRobotServer:
                 data_str = f"JOY,{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
             elif self.last_command_type == 'slider':
                 data_str = f"SLD,{self.gripper1:.2f},{self.gripper2:.2f}\n"
+            elif self.last_command_type == 'auto_grip_yellow':
+                # YELLOW: half grip (0.50)
+                data_str = f"SLD,0.50,0.50\n"
+                self.gripper1 = 0.50
+                self.gripper2 = 0.50
+            elif self.last_command_type == 'auto_grip_green':
+                # GREEN: full grip (1.00)
+                data_str = f"SLD,1.00,1.00\n"
+                self.gripper1 = 1.00
+                self.gripper2 = 1.00
+            elif self.last_command_type == 'auto_lift':
+                # LIFT: use lift_g1, lift_g2
+                data_str = f"SLD,{self.lift_g1:.2f},{self.lift_g2:.2f}\n"
             elif self.last_command_type == 'preset':
                 data_str = f"PRE,{self.preset_num}\n"
             elif self.last_command_type == 'gripper_toggle':
-                data_str = f"GRP,{self.gripper_state}\n"
+                data_str = f"GRP,{int(self.gripper_state)}\n"
             elif self.last_command_type == 'mode':
                 data_str = f"MOD,{self.mode_value}\n"
             elif self.last_command_type == 'rotate':
@@ -243,11 +342,20 @@ class IntegratedRobotServer:
                 self.send_to_stm()
             
             elif msg.startswith("GRIPPER:"):
-                self.last_command_type = 'gripper_toggle'
-                state = msg.split(":")[1]
-                self.gripper_state = "ON" if state == "GRIP_ON" else "OFF"
-                print(f"[GRIPPER] State: {self.gripper_state}")
-                self.send_to_stm()
+                # ✅ ONLY allow if IDLE
+                if self.detection_state.state == "IDLE":
+                    val = int(msg.split(":")[1])
+                    self.gripper_state = val  # 0 or 1
+                    if val == 1:
+                        self.detection_state.state = "SEARCHING"
+                        print(f"[AUTO] 🔍 Starting autonomous search...")
+                    else:
+                        self.detection_state.state = "IDLE"
+                        print(f"[AUTO] ⏹️  Stopped")
+                    self.last_command_type = 'gripper_toggle'
+                    self.send_to_stm()
+                else:
+                    print(f"[AUTO] ⚠️  Gripper blocked (state: {self.detection_state.state})")
             
             elif msg.startswith("MODE:"):
                 self.last_command_type = 'mode'
@@ -256,14 +364,22 @@ class IntegratedRobotServer:
                 self.send_to_stm()
             
             elif msg.startswith("SLIDER:"):
-                self.last_command_type = 'slider'
-                data_part = msg.split(":", 1)[1]
-                parts = data_part.split(",")
-                if len(parts) == 2:
-                    self.gripper1 = float(parts[0])
-                    self.gripper2 = float(parts[1])
-                    print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}")
-                    self.send_to_stm()
+                # ✅ ONLY allow if LIFT_WAIT
+                if self.detection_state.state == "LIFT_WAIT":
+                    data_part = msg.split(":", 1)[1]
+                    parts = data_part.split(",")
+                    if len(parts) == 2:
+                        self.lift_g1 = float(parts[0])
+                        self.lift_g2 = float(parts[1])
+                        self.detection_state.state = "LIFTING"
+                        if time.time() - self.detection_state.lift_start < 2.0:
+                            self.detection_state.state = "IDLE"
+                            self.detection_state.reset_counters()
+                        print(f"[AUTO] ⬆️  Lifting (G1: {self.lift_g1:.2f}, G2: {self.lift_g2:.2f})")
+                        self.last_command_type = 'auto_lift'
+                        self.send_to_stm()
+                else:
+                    print(f"[AUTO] ⚠️  Lift blocked (state: {self.detection_state.state})")
             
             elif msg.startswith("ROTATE:"):
                 self.last_command_type = 'rotate'
@@ -284,6 +400,18 @@ class IntegratedRobotServer:
                     print(f"[TEAM] Detection will prioritize: {team}")
                     print(f"{'='*60}\n")
             
+            # Handle team commands WITHOUT prefix (Android sends "KFS-Blue" or "KFS-Red" directly)
+            elif msg == "KFS-Blue" or msg == "KFS-Red":
+                with self.priority_lock:
+                    old_team = self.priority_team
+                    self.priority_team = msg
+                
+                if old_team != msg:
+                    print(f"\n{'='*60}")
+                    print(f"[TEAM] 🎯 Priority changed: {self.priority_team}")
+                    print(f"[TEAM] Detection will prioritize: {msg}")
+                    print(f"{'='*60}\n")
+            
             else:
                 # Numeric data
                 parts = msg.split(",")
@@ -297,7 +425,7 @@ class IntegratedRobotServer:
                     self.send_to_stm()
                 
                 elif len(parts) == 1:
-                    # Motor1 only
+                    # Motor1 value only
                     self.last_command_type = None
                     self.motor1_value = float(parts[0])
                     print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
@@ -528,50 +656,83 @@ class IntegratedRobotServer:
                     
                     # Process selected target
                     if selected_target is not None:
-                        x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
+                        with self.priority_lock:
+                            current_priority = self.priority_team
+                        if lab == current_priority:
+                            x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
                         
-                        scaled_x1 = x1 * sx
-                        scaled_y1 = y1 * sy
-                        scaled_x2 = x2 * sx
-                        scaled_y2 = y2 * sy
+                            scaled_x1 = x1 * sx
+                            scaled_y1 = y1 * sy
+                            scaled_x2 = x2 * sx
+                            scaled_y2 = y2 * sy
                         
-                        box_width = scaled_x2 - scaled_x1
-                        box_height = scaled_y2 - scaled_y1
+                            box_width = scaled_x2 - scaled_x1
+                            box_height = scaled_y2 - scaled_y1
                         
-                        indicator_size = margin * 2
+                            indicator_size = margin * 2
                         
-                        width_diff = abs(box_width - indicator_size) / indicator_size * 100
-                        height_diff = abs(box_height - indicator_size) / indicator_size * 100
-                        avg_diff = (width_diff + height_diff) / 2
+                            width_diff = abs(box_width - indicator_size) / indicator_size * 100
+                            height_diff = abs(box_height - indicator_size) / indicator_size * 100
+                            avg_diff = (width_diff + height_diff) / 2
                         
-                        if avg_diff < 35:
-                            color = (0, 255, 0)
-                        elif avg_diff < 50:
-                            color = (0, 255, 255)
-                        else:
-                            color = (0, 0, 255)
+                            if avg_diff < 35:
+                                color = (0, 255, 0)
+                            elif avg_diff < 50:
+                                color = (0, 255, 255)
+                            else:
+                                color = (0, 0, 255)
                         
-                        cx_small = (x1 + x2) / 2.0
-                        cy_small = (y1 + y2) / 2.0
+                            cx_small = (x1 + x2) / 2.0
+                            cy_small = (y1 + y2) / 2.0
                         
-                        obj_cx = int(cx_small * sx)
-                        obj_cy = int(cy_small * sy)
-                        conf_val = float(selected_target.conf[0])
-                        self.buffer_conf.append(conf_val)
+                            obj_cx = int(cx_small * sx)
+                            obj_cy = int(cy_small * sy)
+                            conf_val = float(selected_target.conf[0])
+                            self.buffer_conf.append(conf_val)
                         
-                        if len(self.buffer_conf) == self.buffer_conf.maxlen:
-                            stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
+                            if len(self.buffer_conf) == self.buffer_conf.maxlen:
+                                stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
                         
-                        if stable_conf is not None and stable_conf > CONF_THRESHOLD:
-                            detected = True
-                            offset_x = obj_cx - center_x
-                            offset_y = obj_cy - center_y
+                            if stable_conf is not None and stable_conf > CONF_THRESHOLD:
+                                detected = True
+                                offset_x = obj_cx - center_x
+                                offset_y = obj_cy - center_y
                             
-                            dist_x_cm = offset_x / pxlPercm
-                            dist_y_cm = offset_y / pxlPercm
-                            in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
+                                dist_x_cm = offset_x / pxlPercm
+                                dist_y_cm = offset_y / pxlPercm
+                                in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
+                            #State machine processing
+                                if self.detection_state.state != "IDLE":
+                                    state_color = "RED"
+                                    if color == (0, 255, 0):  # GREEN
+                                       state_color = "GREEN"
+                                    elif color == (0, 255, 255):  # YELLOW
+                                        state_color = "YELLOW"
+                                
+                                    should_grip_yellow, should_grip_green = self.detection_state.process_detection(detected, state_color)
+                                
+                                # Execute YELLOW grip
+                                    if should_grip_yellow and not self.auto_gripper_sent:
+                                        self.last_command_type = 'auto_grip_yellow'
+                                        self.send_to_stm()
+                                        self.auto_gripper_sent = True
+                                        print(f"[AUTO] 🟡 YELLOW stable - Grip 0.50")
+                                    elif state_color != "YELLOW":
+                                        self.auto_gripper_sent = False
+                                
+                                # Execute GREEN grip + cooldown
+                                    if should_grip_green and not self.auto_grab_sent:
+                                        self.last_command_type = 'auto_grip_green'
+                                        self.send_to_stm()
+                                        self.auto_grab_sent = True
+                                        print(f"[AUTO] 🟢 GREEN stable - Grip 1.00 + COOLDOWN START")
+                                    elif state_color != "GREEN":
+                                        self.auto_grab_sent = False
                 else:
                     self.buffer_conf.clear()
+                    if self.detection_state.state == "SEARCHING":
+                        self.detection_state.reset_counters()
+                        self.detection_state.color = "RED"
                 
                 # Draw crosshair
                 cv2.line(annotated, (center_x, 0), (center_x, rot_h), color, 2)
@@ -579,7 +740,7 @@ class IntegratedRobotServer:
                 cv2.rectangle(annotated, (center_x - margin, center_y - margin), (center_x + margin, center_y + margin), color, 2)
                 
                 # Draw center circle
-                if detected and obj_cx is not None and (lab == "KFS-Blue" or lab == "KFS-Red"):
+                if detected and obj_cx is not None and current_priority:
                     cv2.circle(annotated, (int(obj_cx), int(obj_cy)), 6, (255, 255, 0), -1)
                 
                 # Draw text
@@ -587,6 +748,28 @@ class IntegratedRobotServer:
                 cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 3, cv2.LINE_AA)
                 cv2.putText(annotated, txt, (20, rot_h - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 255), 1, cv2.LINE_AA)
                 
+                state_text = f"State: {self.detection_state.state}"
+                color_text = f"Color: {self.detection_state.color}"
+                yellow_text = f"Yellow: {self.detection_state.yellow_counter}/{self.detection_state.yellow_threshold}"
+                green_text = f"Green: {self.detection_state.green_counter}/{self.detection_state.green_threshold}"
+                
+                display_color = (0, 0, 255)  
+                if self.detection_state.color == "GREEN":
+                    display_color = (0, 255, 0)
+                elif self.detection_state.color == "YELLOW":
+                    display_color = (0, 255, 255)
+                
+                cv2.putText(annotated, state_text, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, display_color, 1)
+                cv2.putText(annotated, color_text, (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.55, display_color, 1)
+                cv2.putText(annotated, yellow_text, (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 1)
+                cv2.putText(annotated, green_text, (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 1)
+                
+                if self.detection_state.cooldown_active:
+                    cooldown_elapsed = time.time() - self.detection_state.cooldown_start
+                    cooldown_remaining = self.detection_state.cooldown_duration - cooldown_elapsed
+                    cooldown_text = f"COOLDOWN: {cooldown_remaining:.1f}s"
+                    cv2.putText(annotated, cooldown_text, (20, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
                 # Send frame
                 frame_counter += 1
                 if frame_counter % SEND_EVERY_N_FRAMES == 0:
