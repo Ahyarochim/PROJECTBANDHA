@@ -35,8 +35,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
+model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best (1).pt'
+yml_File = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -215,6 +215,7 @@ class IntegratedRobotServer:
             if DEBUG:
                 print("[SERIAL] Not connected to STM32")
             return False
+        
         try:
             # Format berdasarkan tipe command
             if self.last_command_type == 'joystick':
@@ -230,17 +231,17 @@ class IntegratedRobotServer:
             elif self.last_command_type == 'rotate':
                 data_str = f"ROT,{self.rotate_value}\n"
             elif self.last_command_type == 'gripper_down':
-                data_str = "GRD,DOWN\n"
+                # GUNAKAN FORMAT SLIDER: motor1 untuk naik/turun gripper
+                data_str = f"SLD,{self.gripper1:.2f},0.00\n"
             elif self.last_command_type == 'gripper_on':
                 data_str = "1\n"
             elif self.last_command_type == 'gripper_off':
                 data_str = "0\n"
-            elif self.last_command_type == 'move_forward':
-                # NEW: Command untuk maju saat RED indicator
-                data_str = "MVF,FORWARD\n"
-            elif self.last_command_type == 'stop':
-                # NEW: Command untuk STOP robot
-                data_str = "STP,STOP\n"
+            elif self.last_command_type == 'move_forward' or self.last_command_type == 'stop':
+                # GUNAKAN FORMAT JOYSTICK: x,y untuk arah gerakan
+                # move_forward: 0,1.0 (maju penuh)
+                # stop: 0,0 (berhenti)
+                data_str = f"{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
             else:
                 data_str = f"{self.motor1_value:.2f}\n"
             
@@ -277,30 +278,28 @@ class IntegratedRobotServer:
                     print(f"{'='*60}\n")
                 return
             
-            # Command parsing (prefix-based)
+            # Command parsing
             if msg.startswith("PRESET:"):
                 self.last_command_type = 'preset'
                 self.preset_num = int(msg.split(":")[1])
                 print(f"[PRESET] Num: {self.preset_num}")
                 self.send_to_stm()
-                return
             
-            if msg.startswith("GRIPPER:"):
+            elif msg.startswith("GRIPPER:"):
+                # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
                 self.last_command_type = 'gripper_toggle'
-                state = msg.split(":")[1]
-                self.gripper_state = "1" if state == "GRIP_ON" else "0"
+                state= int(msg.split(":")[1])
+                self.gripper_state = 1 if state == 1 else 0
                 print(f"[GRIPPER] State: {self.gripper_state}")
                 self.send_to_stm()
-                return
             
-            if msg.startswith("MODE:"):
+            elif msg.startswith("MODE:"):
                 self.last_command_type = 'mode'
                 self.mode_value = msg.split(":")[1]
                 print(f"[MODE] Value: {self.mode_value}")
                 self.send_to_stm()
-                return
             
-            if msg.startswith("SLIDER:"):
+            elif msg.startswith("SLIDER:"):
                 self.last_command_type = 'slider'
                 data_part = msg.split(":", 1)[1]
                 parts = data_part.split(",")
@@ -309,14 +308,12 @@ class IntegratedRobotServer:
                     self.gripper2 = float(parts[1])
                     print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}")
                     self.send_to_stm()
-                return
             
-            if msg.startswith("ROTATE:"):
+            elif msg.startswith("ROTATE:"):
                 self.last_command_type = 'rotate'
                 self.rotate_value = int(msg.split(":")[1])
                 print(f"[ROTATE] Value: {self.rotate_value}")
                 self.send_to_stm()
-                return
             
             elif msg.startswith("TEAM:"):
                 # TEAM:KFS-Blue atau TEAM:KFS-Red
@@ -356,7 +353,7 @@ class IntegratedRobotServer:
                     self.send_to_stm()
                 
                 elif len(parts) == 1:
-                    # Motor1 value only
+                    # Motor1 only
                     self.last_command_type = None
                     self.motor1_value = float(parts[0])
                     print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
@@ -364,6 +361,38 @@ class IntegratedRobotServer:
         
         except Exception as e:
             print(f"[PARSE] Error: {e}")
+    
+    def zmq_receive_loop(self):
+        """ZMQ receive loop"""
+        print("[ZMQ] Listening for messages...")
+        
+        while self.running:
+            try:
+                if self.zmq_socket.poll(timeout=100):
+                    message = self.zmq_socket.recv()
+                    self.parse_android_message(message)
+            except zmq.Again:
+                continue
+            except Exception as e:
+                if DEBUG:
+                    print(f"[ZMQ] Error: {e}")
+                time.sleep(0.1)
+    
+    # ========================
+    # VISION PROCESSING
+    # ========================
+    def load_calibration(self, path):
+        """Load camera calibration"""
+        try:
+            with open(path, 'r') as f:
+                data = yaml.safe_load(f)
+            mtx = np.array(data["CameraMatrix"], dtype=np.float64)
+            dist = np.array(data["dist_coeff"], dtype=np.float64).reshape(1, -1)
+            pxlPercm = float(data.get("PIXEL_PER_CM", 10.0))
+            return mtx, dist, pxlPercm
+        except Exception as e:
+            print(f"[WARN] Load calibration failed: {e}")
+            return None, None, 10.0
     
     def draw_box_and_label(self, img, xy1, xy2, label_text=None, conf=None, color=(255, 0, 0), thickness=2):
         """Draw bounding box with label"""
@@ -555,83 +584,50 @@ class IntegratedRobotServer:
                     
                     # Process selected target
                     if selected_target is not None:
-                        with self.priority_lock:
-                            current_priority = self.priority_team
-                        if lab == current_priority:
-                            x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
+                        x1, y1, x2, y2 = [float(v) for v in selected_target.xyxy[0]]
                     
-                            scaled_x1 = x1 * sx
-                            scaled_y1 = y1 * sy
-                            scaled_x2 = x2 * sx
-                            scaled_y2 = y2 * sy
+                        scaled_x1 = x1 * sx
+                        scaled_y1 = y1 * sy
+                        scaled_x2 = x2 * sx
+                        scaled_y2 = y2 * sy
                     
-                            box_width = scaled_x2 - scaled_x1
-                            box_height = scaled_y2 - scaled_y1
+                        box_width = scaled_x2 - scaled_x1
+                        box_height = scaled_y2 - scaled_y1
                     
-                            indicator_size = margin * 2
+                        indicator_size = margin * 2
                     
-                            width_diff = abs(box_width - indicator_size) / indicator_size * 100
-                            height_diff = abs(box_height - indicator_size) / indicator_size * 100
-                            avg_diff = (width_diff + height_diff) / 2
+                        width_diff = abs(box_width - indicator_size) / indicator_size * 100
+                        height_diff = abs(box_height - indicator_size) / indicator_size * 100
+                        avg_diff = (width_diff + height_diff) / 2
                     
-                            if avg_diff < 35:
-                                color = (0, 255, 0)
-                            elif avg_diff < 50:
-                                color = (0, 255, 255)
-                            else:
-                                color = (0, 0, 255)
+                        if avg_diff < 35:
+                            color = (0, 255, 0)
+                        elif avg_diff < 50:
+                            color = (0, 255, 255)
+                        else:
+                            color = (0, 0, 255)
                     
-                            cx_small = (x1 + x2) / 2.0
-                            cy_small = (y1 + y2) / 2.0
+                        cx_small = (x1 + x2) / 2.0
+                        cy_small = (y1 + y2) / 2.0
                     
-                            obj_cx = int(cx_small * sx)
-                            obj_cy = int(cy_small * sy)
-                            conf_val = float(selected_target.conf[0])
-                            self.buffer_conf.append(conf_val)
+                        obj_cx = int(cx_small * sx)
+                        obj_cy = int(cy_small * sy)
+                        conf_val = float(selected_target.conf[0])
+                        self.buffer_conf.append(conf_val)
+                    
+                        if len(self.buffer_conf) == self.buffer_conf.maxlen:
+                            stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
+                    
+                        if stable_conf is not None and stable_conf > CONF_THRESHOLD:
+                            detected = True
+                            offset_x = obj_cx - center_x
+                            offset_y = obj_cy - center_y
                         
-                            if len(self.buffer_conf) == self.buffer_conf.maxlen:
-                                stable_conf = sum(self.buffer_conf) / len(self.buffer_conf)
-                        
-                            if stable_conf is not None and stable_conf > CONF_THRESHOLD:
-                                detected = True
-                                offset_x = obj_cx - center_x
-                                offset_y = obj_cy - center_y
-                            
-                                dist_x_cm = offset_x / pxlPercm
-                                dist_y_cm = offset_y / pxlPercm
-                                in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
-                            #State machine processing
-                                if self.detection_state.state != "IDLE":
-                                    state_color = "RED"
-                                    if color == (0, 255, 0):  # GREEN
-                                       state_color = "GREEN"
-                                    elif color == (0, 255, 255):  # YELLOW
-                                        state_color = "YELLOW"
-                                
-                                    should_grip_yellow, should_grip_green = self.detection_state.process_detection(detected, state_color)
-                                
-                                # Execute YELLOW grip
-                                    if should_grip_yellow and not self.auto_gripper_sent:
-                                        self.last_command_type = 'auto_lift_yellow'
-                                        self.send_to_stm()
-                                        self.auto_gripper_sent = True
-                                        print(f"[AUTO] 🟡 YELLOW stable - Grip 0.50")
-                                    elif state_color != "YELLOW":
-                                        self.auto_gripper_sent = False
-                                
-                                # Execute GREEN grip + cooldown
-                                    if should_grip_green and not self.auto_grab_sent:
-                                        self.last_command_type = 'auto_lift_green'
-                                        self.send_to_stm()
-                                        self.auto_grab_sent = True
-                                        print(f"[AUTO] 🟢 GREEN stable - Grip 1.00 + COOLDOWN START")
-                                    elif state_color != "GREEN":
-                                        self.auto_grab_sent = False
+                            dist_x_cm = offset_x / pxlPercm
+                            dist_y_cm = offset_y / pxlPercm
+                            in_center = abs(offset_x) <= margin and abs(offset_y) <= margin
                 else:
                     self.buffer_conf.clear()
-                    if self.detection_state.state == "SEARCHING":
-                        self.detection_state.reset_counters()
-                        self.detection_state.color = "RED"
                     
                 now = time.time()
 
@@ -712,19 +708,25 @@ class IntegratedRobotServer:
                         if self.yellow_stable_count >= self.YELLOW_STABLE_FRAMES:
                             # State 1: STOPPING
                             if self.yellow_state is None:
+                                # STOP robot dengan joystick 0,0
                                 self.last_command_type = 'stop'
+                                self.joystick_x = 0.0
+                                self.joystick_y = 0.0
                                 sent = self.send_to_stm()
                                 self.yellow_state = 'STOPPING'
                                 self.yellow_state_timestamp = now
                                 
                                 print(f"\n{'='*60}")
                                 print(f"[AUTO-GRIP] 🛑 STOP SENT! (Step 1/4)")
+                                print(f"[AUTO-GRIP] Command: Joystick 0,0 (STOP)")
                                 print(f"[AUTO-GRIP] Success: {sent}")
                                 print(f"{'='*60}\n")
                             
                             # State 2: LOWERING GRIPPER (setelah 0.5 detik stop)
                             elif self.yellow_state == 'STOPPING' and (now - self.yellow_state_timestamp) >= 0.5:
+                                # LOWER gripper dengan SLIDER format: motor1 untuk naik/turun
                                 self.last_command_type = 'gripper_down'
+                                self.gripper1 = 0.5  # Nilai untuk turunkan gripper (sesuaikan dengan STM)
                                 sent = self.send_to_stm()
                                 self.yellow_state = 'LOWERING'
                                 self.yellow_state_timestamp = now
@@ -732,6 +734,7 @@ class IntegratedRobotServer:
                                 
                                 print(f"\n{'='*60}")
                                 print(f"[AUTO-GRIP] ⬇️ GRIPPER DOWN SENT! (Step 2/4)")
+                                print(f"[AUTO-GRIP] Command: SLIDER motor1={self.gripper1:.2f}")
                                 print(f"[AUTO-GRIP] Success: {sent}")
                                 print(f"{'='*60}\n")
                             
@@ -747,12 +750,16 @@ class IntegratedRobotServer:
                             
                             # State 4: MOVING FORWARD (lanjut ke hijau)
                             elif self.yellow_state == 'WAITING':
+                                # MAJU dengan joystick 0,1.0 (maju penuh)
                                 self.last_command_type = 'move_forward'
+                                self.joystick_x = 0.0
+                                self.joystick_y = 0.5  # Maju penuh
                                 sent = self.send_to_stm()
                                 self.yellow_state = 'MOVING'
                                 
                                 print(f"\n{'='*60}")
                                 print(f"[AUTO-GRIP] ➡️ MOVE FORWARD SENT! (Step 4/4)")
+                                print(f"[AUTO-GRIP] Command: Joystick 0.0,1.0 (FORWARD)")
                                 print(f"[AUTO-GRIP] Success: {sent}")
                                 print(f"[AUTO-GRIP] Target: GREEN indicator")
                                 print(f"{'='*60}\n")
@@ -771,12 +778,16 @@ class IntegratedRobotServer:
                         
                         # NEW: Kirim command MAJU saat RED stabil
                         if self.red_stable_count >= self.RED_STABLE_FRAMES and not self.move_forward_sent:
+                            # MAJU dengan joystick 0,1.0 (maju penuh)
                             self.last_command_type = 'move_forward'
+                            self.joystick_x = 0.0
+                            self.joystick_y = 1.0  # Maju penuh
                             sent = self.send_to_stm()
                             self.move_forward_sent = True  # Set flag agar tidak repeat
                             
                             print(f"\n{'='*60}")
                             print(f"[AUTO-GRIP] ➡️ MOVE FORWARD SENT! (ONCE)")
+                            print(f"[AUTO-GRIP] Command: Joystick 0.0,1.0 (FORWARD)")
                             print(f"[AUTO-GRIP] Success: {sent}")
                             print(f"[AUTO-GRIP] Red frames: {self.red_stable_count}")
                             print(f"[AUTO-GRIP] Target: YELLOW indicator")
