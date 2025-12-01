@@ -317,27 +317,20 @@ class IntegratedRobotServer:
             elif msg.startswith("TEAM:"):
                 # TEAM:KFS-Blue atau TEAM:KFS-Red
                 team = msg.split(":", 1)[1]
-                with self.priority_lock:
-                    old_team = self.priority_team
-                    self.priority_team = team
-                
+                if msg == "KFS-Blue" or msg == "KFS-Red":
+                    # with self.priority_lock:
+                    #     old_team = self.priority_team
+                    #     self.priority_team = msg
+                    with self.priority_lock:
+                        old_team = self.priority_team
+                        self.priority_team = team
                 if old_team != team:
                     print(f"\n{'='*60}")
                     print(f"[TEAM] 🎯 Priority changed: {self.priority_team}")
                     print(f"[TEAM] Detection will prioritize: {team}")
                     print(f"{'='*60}\n")
-            
-            # Handle team commands WITHOUT prefix (Android sends "KFS-Blue" or "KFS-Red" directly)
-            elif msg == "KFS-Blue" or msg == "KFS-Red":
-                with self.priority_lock:
-                    old_team = self.priority_team
-                    self.priority_team = msg
-                
-                if old_team != msg:
-                    print(f"\n{'='*60}")
-                    print(f"[TEAM] 🎯 Priority changed: {self.priority_team}")
-                    print(f"[TEAM] Detection will prioritize: {msg}")
-                    print(f"{'='*60}\n")
+        
+ 
             
             else:
                 # Numeric data
