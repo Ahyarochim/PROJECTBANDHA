@@ -1,3 +1,4 @@
+from datetime import datetime
 import zmq
 import time
 import serial
@@ -44,9 +45,8 @@ class ZMQRobotServer:
         self.gripper1 = 0.0
         self.gripper2 = 0.0
         self.preset_num = 0
-        self.gripper_state = "OFF"
+        self.gripper_state = 0
         self.mode_value = "MANUAL"
-        self.rotate_value = 0  # TAMBAHAN: untuk menyimpan nilai rotate
         
         # Threading
         self.running = False
@@ -105,15 +105,17 @@ class ZMQRobotServer:
                 data_str = f"GRP,{self.gripper_state}\n"
             elif self.last_command_type == 'mode':
                 data_str = f"MOD,{self.mode_value}\n"
-            elif self.last_command_type == 'rotate':  # TAMBAHAN: handle rotate command
+            elif self.last_command_type == 'rotate':  
                 data_str = f"ROT,{self.rotate_value}\n"
+
             else:
                 # Default: motor1 value only
                 data_str = f"{self.motor1_value:.2f}\n"
 
             self.ser.write(data_str.encode())
             self.ser.flush()
-            print(f"[SERIAL] Sent: {repr(data_str.strip())}")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            print(f"[{timestamp}] [SERIAL] Sent: {repr(data_str.strip())}")
             return True
         except Exception as e:
             print(f"[SERIAL] Send error: {e}")
@@ -153,20 +155,13 @@ class ZMQRobotServer:
         elif cmd_type == 'gripper_toggle':
             # Format: type(1) + state(1) [0=OFF, 1=ON]
             cmd = 0x04
-            state = 1 if data['state'] == 'ON' else 0
-            payload = struct.pack('<BB', cmd, state)
+            payload = struct.pack('<BB', cmd, data['gripper_toggle'])
             
         elif cmd_type == 'mode':
             # Format: type(1) + mode(1) [1=MANUAL, 2=AUTO]
             cmd = 0x05
             mode_val = 1 if data['mode'] == 'MANUAL' else 2
             payload = struct.pack('<BB', cmd, mode_val)
-            
-        # TAMBAHAN: Handle rotate command
-        elif cmd_type == 'rotate':
-            # Format: type(1) + rotate_value(1 signed byte) [-5, 0, +5]
-            cmd = 0x06
-            payload = struct.pack('<Bb', cmd, data['rotate'])
         else:
             return b''
         
@@ -206,8 +201,8 @@ class ZMQRobotServer:
             elif msg.startswith("GRIPPER:"):
                 # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
                 self.last_command_type = 'gripper_toggle'
-                state = msg.split(":")[1]
-                self.gripper_state = "ON" if state == "GRIP_ON" else "OFF"
+                state = int(msg.split(":")[1])
+                self.gripper_state = 1 if state == 1 else 0
                 print(f"[GRIPPER] State: {self.gripper_state}")
                 self.send_to_stm()
 
@@ -228,14 +223,6 @@ class ZMQRobotServer:
                     self.gripper2 = float(parts[1])
                     print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}")
                     self.send_to_stm()
-                    
-            # TAMBAHAN: Handle ROTATE command
-            elif msg.startswith("ROTATE:"):
-                # ROTATE:-5 atau ROTATE:0 atau ROTATE:5
-                self.last_command_type = 'rotate'
-                self.rotate_value = int(msg.split(":")[1])
-                print(f"[ROTATE] Value: {self.rotate_value}")
-                self.send_to_stm()
 
             else:
                 # Numeric data (CSV atau single value)
@@ -267,6 +254,15 @@ class ZMQRobotServer:
                     self.joystick_y = new_y
                     print(f"[JOYSTICK] {msg}")
                     self.send_to_stm()
+
+            elif len(parts) == 1:
+                # Motor1 value only
+                self.last_command_type = None
+                self.motor1_value = float(parts[0])
+                print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
+                self.send_to_stm()
+            else:
+                    print(f"[WARN] Invalid format (got {len(parts)} values)")
 
         except ValueError as e:
             print(f"[ERROR] Parsing error: {e}")
@@ -329,8 +325,7 @@ class ZMQRobotServer:
         return {
             'mode': self.mode.name,
             'motor1': self.motor1_value,
-            'serial_connected': self.serial_connected,
-            'rotate': self.rotate_value  # TAMBAHAN
+            'serial_connected': self.serial_connected
         }
 
 
@@ -338,7 +333,7 @@ class ZMQRobotServer:
 if __name__ == "__main__":
     # Konfigurasi
     ZMQ_PORT = 6000  # Port yang sama dengan Android
-    SERIAL_PORT = 'COM3'  # Sesuaikan dengan port STM32 Anda
+    SERIAL_PORT = 'COM6'  # Sesuaikan dengan port STM32 Anda
     # Linux: '/dev/ttyUSB0' atau '/dev/ttyACM0'
     # Windows: 'COM3', 'COM4', dll
     BAUD_RATE = 115200

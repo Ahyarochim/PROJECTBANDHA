@@ -35,8 +35,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best (1).pt'
-yml_File = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Calibration_Matrix.yaml'
+model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
+yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -156,7 +156,7 @@ class IntegratedRobotServer:
             self.device = "cpu"
         
         # Camera
-        self.camera = cv2.VideoCapture(2)
+        self.camera = cv2.VideoCapture(0)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, REQ_W)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, REQ_H)
         self.camera.set(cv2.CAP_PROP_FPS, FPS)
@@ -341,26 +341,49 @@ class IntegratedRobotServer:
                     print(f"{'='*60}\n")
             
             else:
-                # Numeric data
+                # Numeric data (CSV atau single value)
                 parts = msg.split(",")
+
+            if len(parts) == 2:
                 
-                if len(parts) == 2:
-                    # Joystick
-                    self.last_command_type = 'joystick'
-                    self.joystick_x = float(parts[0])
-                    self.joystick_y = float(parts[1])
-                    print(f"[JOYSTICK] X: {self.joystick_x:.2f}, Y: {self.joystick_y:.2f}")
-                    self.send_to_stm()
+                self.last_command_type = 'joystick'
+                new_x = float(parts[0])
+                new_y = float(parts[1])
                 
-                elif len(parts) == 1:
-                    # Motor1 only
-                    self.last_command_type = None
-                    self.motor1_value = float(parts[0])
-                    print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
+                # Cek apakah ada perubahan ke 0.0,0.0
+                if (self.joystick_x != 0.0 or self.joystick_y != 0.0) and \
+                   (new_x == 0.0 and new_y == 0.0):
+                    # Kirim 0.0,0.0 DUA KALI untuk verifikasi
+                    self.joystick_x = new_x
+                    self.joystick_y = new_y
+                    print(f"[JOYSTICK] {msg} (STOP - sending twice)")
                     self.send_to_stm()
-        
+                    time.sleep(0.05)  # Delay 50ms
+                    self.send_to_stm()  # Kirim lagi
+                    time.sleep(0.05)  # Delay 50ms
+                    self.send_to_stm()
+                    time.sleep(0.05)  # Delay 50ms
+                    self.send_to_stm()
+                else:
+                    # Update normal
+                    self.joystick_x = new_x
+                    self.joystick_y = new_y
+                    print(f"[JOYSTICK] {msg}")
+                    self.send_to_stm()
+
+            elif len(parts) == 1:
+                # Motor1 value only
+                self.last_command_type = None
+                self.motor1_value = float(parts[0])
+                print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
+                self.send_to_stm()
+            else:
+                    print(f"[WARN] Invalid format (got {len(parts)} values)")
+
+        except ValueError as e:
+            print(f"[ERROR] Parsing error: {e}")
         except Exception as e:
-            print(f"[PARSE] Error: {e}")
+            print(f"[PARSE] Error parsing message: {e}")
     
     def zmq_receive_loop(self):
         """ZMQ receive loop"""
