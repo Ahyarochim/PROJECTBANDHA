@@ -3085,6 +3085,12 @@ drawable ic_home_black_24dp
 drawable ic_keyboard_black_24dp
 drawable ic_launcher_background
 drawable ic_launcher_foreground
+drawable ic_launcher_new1_background
+drawable ic_launcher_new1_foreground
+drawable ic_launcher_new2_background
+drawable ic_launcher_new2_foreground
+drawable ic_launcher_new_background
+drawable ic_launcher_new_foreground
 drawable ic_m3_chip_check
 drawable ic_m3_chip_checked_circle
 drawable ic_m3_chip_close
@@ -3654,6 +3660,7 @@ id tag_transition_group
 id tag_unhandled_key_event_manager
 id tag_unhandled_key_listeners
 id tag_window_insets_animation_callback
+id teamSwitch
 id text
 id text2
 id textEnd
@@ -3917,6 +3924,12 @@ layout select_dialog_singlechoice_material
 layout support_simple_spinner_dropdown_item
 menu bottom_nav_menu
 mipmap ic_launcher
+mipmap ic_launcher_new
+mipmap ic_launcher_new1
+mipmap ic_launcher_new1_round
+mipmap ic_launcher_new2
+mipmap ic_launcher_new2_round
+mipmap ic_launcher_new_round
 mipmap ic_launcher_round
 plurals mtrl_badge_content_description
 string abc_action_bar_home_description
