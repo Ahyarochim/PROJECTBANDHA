@@ -281,6 +281,18 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.17" />
 
+    <Button
+        android:id="@+id/reset"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="56dp"
+        android:layout_marginBottom="4dp"
+        android:text="reset"
+        app:layout_constraintBottom_toTopOf="@+id/tvGripper1Value"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/preset2"
+        app:layout_constraintTop_toBottomOf="@+id/btnSetting" />
+
     <!-- Tambahkan widget ini ke dalam activity_controller.xml Anda -->
 
     <!-- TextView untuk menampilkan IP address HP -->

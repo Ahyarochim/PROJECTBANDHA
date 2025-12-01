@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
 
     private UDPReceiver receiver;
     private ImageView videoStream;
-    private Button btnConnect, preset1, preset2, btnGripper, btnSendIP;
+    private Button btnConnect, preset1, preset2, btnGripper, btnSendIP, btnReset;
     private ImageButton btnSetting, btnRotateRight, btnRotateLeft;
     private TextView koor, tvGripper1Value, tvGripper2Value, tvMyIP;
     private String msg;
@@ -155,6 +155,7 @@ public class MainActivity extends AppCompatActivity {
         preset1 = findViewById(R.id.preset1);
         preset2 = findViewById(R.id.preset2);
         btnGripper = findViewById(R.id.btnGripper);
+        btnReset = findViewById(R.id.reset);  // NEW: Init reset button
 
         // Display my IP
 //        tvMyIP.setText("My IP: " + myIpAddress);
@@ -162,6 +163,7 @@ public class MainActivity extends AppCompatActivity {
         setupSliderListeners();
         setupPresetButtons();
         setupGripperButton();
+        setupResetButton();  // NEW: Setup reset button
 //        setupSendIPButton();
 
         // NEW: Setup KFS Team Switch
@@ -222,7 +224,7 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
-// ROTATE RIGHT BUTTON
+        // ROTATE RIGHT BUTTON
         btnRotateRight.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case android.view.MotionEvent.ACTION_DOWN:
@@ -298,6 +300,76 @@ public class MainActivity extends AppCompatActivity {
             Log.d("ZMQ", "Sent IP address: " + msg);
             Toast.makeText(this, "IP Address sent: " + myIpAddress, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    // NEW: Setup Reset Button
+    private void setupResetButton() {
+        btnReset.setOnClickListener(v -> {
+            if (!isConnected) {
+                Toast.makeText(this, "Not connected to server", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            resetAllValues();
+            Toast.makeText(this, "All values reset to 0", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    // NEW: Reset All Values to 0
+    private void resetAllValues() {
+        // Reset koordinat joystick
+        valX = 0f;
+        valY = 0f;
+        updateCoordinateDisplay();
+        if (isConnected) {
+            sendCoordinate(0f, 0f);
+        }
+
+        // Reset rotasi
+        valRotation = 0f;
+        if (isConnected) {
+            sendRotateValue(0);
+        }
+
+        // Reset sliders
+        valA = 0f;
+        valB = 0f;
+        gripper1.setValue(0f);
+        gripper2.setValue(0f);
+        tvGripper1Value.setText("Motor 1: 0.00");
+        tvGripper2Value.setText("Motor 2: 0.00");
+        if (isConnected) {
+            sendSliderData();
+        }
+
+        // Reset gripper
+        if (isGripping) {
+            isGripping = false;
+            btnGripper.setText("GRIPPER");
+            btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
+            if (isConnected) {
+                sendGripperCommand(0);
+            }
+        }
+
+        // Reset presets
+        if (preset1Active || preset2Active) {
+            preset1Active = false;
+            preset2Active = false;
+            if (isConnected) {
+                sendPresetCommand(0);
+            }
+        }
+
+//        // Reset joystick visual (jika ada method reset di JoystickView)
+//        if (joystick != null) {
+//            joystick.reset();
+//        }
+
+        // Update display
+        petunjuk.setText("X: 0.00 | Y: 0.00\nCENTER ●");
+
+        Log.d("ZMQ", "All values reset to 0");
     }
 
     private void setupGripperButton() {

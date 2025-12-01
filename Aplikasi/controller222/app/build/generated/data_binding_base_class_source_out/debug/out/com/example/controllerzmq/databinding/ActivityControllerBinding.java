@@ -189,6 +189,22 @@ public final class ActivityControllerBinding implements ViewBinding {
    * </ul>
    */
   @Nullable
+  public final Button reset;
+
+  /**
+   * This binding is not available in all configurations.
+   * <p>
+   * Present:
+   * <ul>
+   *   <li>layout-land/</li>
+   * </ul>
+   *
+   * Absent:
+   * <ul>
+   *   <li>layout/</li>
+   * </ul>
+   */
+  @Nullable
   public final SwitchMaterial teamSwitch;
 
   /**
@@ -236,9 +252,9 @@ public final class ActivityControllerBinding implements ViewBinding {
       @NonNull ConstraintLayout controller, @Nullable Slider gripper, @Nullable Slider gripper2,
       @NonNull JoystickView joystick, @NonNull TextView koord, @Nullable TextView modeStatusText,
       @Nullable SwitchMaterial modeSwitch, @Nullable Button preset1, @Nullable Button preset2,
-      @Nullable SwitchMaterial teamSwitch, @Nullable TextView tvGripper1Value,
-      @Nullable TextView tvGripper2Value, @NonNull TextView valJoy,
-      @NonNull ImageView videoStream) {
+      @Nullable Button reset, @Nullable SwitchMaterial teamSwitch,
+      @Nullable TextView tvGripper1Value, @Nullable TextView tvGripper2Value,
+      @NonNull TextView valJoy, @NonNull ImageView videoStream) {
     this.rootView = rootView;
     this.bottomNavigation = bottomNavigation;
     this.btnConnect = btnConnect;
@@ -255,6 +271,7 @@ public final class ActivityControllerBinding implements ViewBinding {
     this.modeSwitch = modeSwitch;
     this.preset1 = preset1;
     this.preset2 = preset2;
+    this.reset = reset;
     this.teamSwitch = teamSwitch;
     this.tvGripper1Value = tvGripper1Value;
     this.tvGripper2Value = tvGripper2Value;
@@ -351,6 +368,9 @@ public final class ActivityControllerBinding implements ViewBinding {
       id = R.id.preset2;
       Button preset2 = ViewBindings.findChildViewById(rootView, id);
 
+      id = R.id.reset;
+      Button reset = ViewBindings.findChildViewById(rootView, id);
+
       id = R.id.teamSwitch;
       SwitchMaterial teamSwitch = ViewBindings.findChildViewById(rootView, id);
 
@@ -374,8 +394,8 @@ public final class ActivityControllerBinding implements ViewBinding {
 
       return new ActivityControllerBinding((ConstraintLayout) rootView, bottomNavigation,
           btnConnect, btnGripper, btnRotateLeft, btnRotateRight, btnSetting, controller, gripper,
-          gripper2, joystick, koord, modeStatusText, modeSwitch, preset1, preset2, teamSwitch,
-          tvGripper1Value, tvGripper2Value, valJoy, videoStream);
+          gripper2, joystick, koord, modeStatusText, modeSwitch, preset1, preset2, reset,
+          teamSwitch, tvGripper1Value, tvGripper2Value, valJoy, videoStream);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

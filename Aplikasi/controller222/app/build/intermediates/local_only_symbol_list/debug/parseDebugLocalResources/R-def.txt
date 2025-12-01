@@ -55,6 +55,7 @@ id modeStatusText
 id modeSwitch
 id preset1
 id preset2
+id reset
 id scrollContent
 id teamSwitch
 id tvGripper1Value

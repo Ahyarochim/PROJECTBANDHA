@@ -123,9 +123,7 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add .">
-      <change beforePath="$PROJECT_DIR$/../../Komunikasi/server/ReceivedFix.py" beforeDir="false" afterPath="$PROJECT_DIR$/../../Komunikasi/server/ReceivedFix.py" afterDir="false" />
-    </list>
+    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add ." />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -173,7 +171,7 @@
   }
 }</component>
   <component name="ProblemsViewState">
-    <option name="selectedTabId" value="_Designer_Tab" />
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 5
