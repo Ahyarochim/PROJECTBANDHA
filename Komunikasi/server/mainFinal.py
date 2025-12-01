@@ -28,15 +28,15 @@ class RobotMode(Enum):
     AUTONOMOUS = 2
 
 # Serial Config
-SERIAL_PORT = 'COM3'  # Sesuaikan: Linux: '/dev/ttyACM0', Windows: 'COM3'
+SERIAL_PORT = 'COM8'  # Sesuaikan: Linux: '/dev/ttyACM0', Windows: 'COM3'
 BAUD_RATE = 115200
 
 # ZMQ Config
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
+model_path = r'C:\bandha\project2 komunikasi\PROJECTBANDHA\Komunikasi\server\best (1).pt'
+yml_File = r'C:\bandha\project2 komunikasi\PROJECTBANDHA\Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -111,6 +111,7 @@ class IntegratedRobotServer:
         self.mode_value = "MANUAL"
         self.rotate_value = 0
         self.motor1_value = 0.0
+        self.reset_state=0
 
         #==== Auto-Grip State ====
         # counters (frame-based)
