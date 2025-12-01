@@ -35,8 +35,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
+model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best (1).pt'
+yml_File = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -156,7 +156,7 @@ class IntegratedRobotServer:
             self.device = "cpu"
         
         # Camera
-        self.camera = cv2.VideoCapture(0)
+        self.camera = cv2.VideoCapture(2)
         self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, REQ_W)
         self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, REQ_H)
         self.camera.set(cv2.CAP_PROP_FPS, FPS)
@@ -665,27 +665,43 @@ class IntegratedRobotServer:
 
                         # ketika stabil cukup lama -> mulai state machine
                         if self.green_stable_count >= self.GREEN_STABLE_FRAMES:
-                            # State 1: WAITING (tunggu 3 detik)
+                            # State 1: STOPPING (STOP dulu!)
                             if self.green_state is None:
+                                # STOP robot dengan joystick 0,0
+                                self.last_command_type = 'stop'
+                                self.joystick_x = 0.0
+                                self.joystick_y = 0.0
+                                sent = self.send_to_stm()
+                                self.green_state = 'STOPPING'
+                                self.green_state_timestamp = now
+                                
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] 🛑 GREEN - STOP SENT! (Step 1/3)")
+                                print(f"[AUTO-GRIP] Command: Joystick 0,0 (STOP)")
+                                print(f"[AUTO-GRIP] Success: {sent}")
+                                print(f"[AUTO-GRIP] Green frames: {self.green_stable_count}")
+                                print(f"{'='*60}\n")
+                            
+                            # State 2: WAITING (tunggu 3 detik untuk stabilkan posisi)
+                            elif self.green_state == 'STOPPING' and (now - self.green_state_timestamp) >= self.GREEN_WAIT_TIME:
                                 self.green_state = 'WAITING'
                                 self.green_state_timestamp = now
                                 
                                 print(f"\n{'='*60}")
-                                print(f"[AUTO-GRIP] ⏳ GREEN STABLE! Waiting {self.GREEN_WAIT_TIME}s before grip...")
-                                print(f"[AUTO-GRIP] Green frames: {self.green_stable_count}")
+                                print(f"[AUTO-GRIP] ⏳ GREEN - WAITING COMPLETE! (Step 2/3)")
+                                print(f"[AUTO-GRIP] Wait time: {self.GREEN_WAIT_TIME}s")
                                 print(f"{'='*60}\n")
                             
-                            # State 2: GRIPPING (setelah 3 detik)
-                            elif self.green_state == 'WAITING' and (now - self.green_state_timestamp) >= self.GREEN_WAIT_TIME:
+                            # State 3: GRIPPING (kirim grip command)
+                            elif self.green_state == 'WAITING':
                                 self.last_command_type = 'gripper_on'
                                 self.gripper_state = "ON"
                                 sent = self.send_to_stm()
                                 self.green_state = 'GRIPPING'
                                 
                                 print(f"\n{'='*60}")
-                                print(f"[AUTO-GRIP] ✅ GRIPPER ON SENT!")
+                                print(f"[AUTO-GRIP] ✅ GRIPPER ON SENT! (Step 3/3)")
                                 print(f"[AUTO-GRIP] Success: {sent}")
-                                print(f"[AUTO-GRIP] Wait time: {self.GREEN_WAIT_TIME}s")
                                 print(f"{'='*60}\n")
                                 
                                 # Set cooldown dan reset
