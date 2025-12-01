@@ -123,7 +123,9 @@
     <option name="autoReloadType" value="NONE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add ." />
+    <list default="true" id="3a9a96c4-715f-4070-8a40-7045f79cf0d4" name="Changes" comment="git add .">
+      <change beforePath="$PROJECT_DIR$/../../Komunikasi/server/ReceivedFix.py" beforeDir="false" afterPath="$PROJECT_DIR$/../../Komunikasi/server/ReceivedFix.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -171,7 +173,7 @@
   }
 }</component>
   <component name="ProblemsViewState">
-    <option name="selectedTabId" value="CurrentFile" />
+    <option name="selectedTabId" value="_Designer_Tab" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 5
@@ -199,7 +201,7 @@
     &quot;project.structure.last.edited&quot;: &quot;Dependencies&quot;,
     &quot;project.structure.proportion&quot;: &quot;0.17&quot;,
     &quot;project.structure.side.proportion&quot;: &quot;0.2&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.CommitDialog&quot;
+    &quot;settings.editor.selected.configurable&quot;: &quot;AndroidSdkUpdater&quot;
   }
 }</component>
   <component name="RecentsManager">
@@ -360,12 +362,12 @@
       <map>
         <entry key="com.example.controllerzmq">
           <value>
-            <CheckInfo lastCheckTimestamp="1764335598617" />
+            <CheckInfo lastCheckTimestamp="1764579077480" />
           </value>
         </entry>
         <entry key="com.example.controllerzmq.test">
           <value>
-            <CheckInfo lastCheckTimestamp="1764335598615" />
+            <CheckInfo lastCheckTimestamp="1764579077498" />
           </value>
         </entry>
       </map>

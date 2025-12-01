@@ -1,11 +1,13 @@
 package com.example.controllerzmq;
 
+import java.util.Locale;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+
 import android.os.Handler;
 import android.os.Looper;
 import android.text.format.Formatter;
@@ -48,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private JoystickView joystick;
     private TextView petunjuk;
     private SwitchMaterial modeSwitch;
+    private SwitchMaterial modeSwitch2;  // NEW: KFS Team Switch
     private TextView modeStatusText;
     private Slider gripper1, gripper2;
 
@@ -68,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isReceiverRunning = false;
     private boolean preset1Active = false;
     private boolean preset2Active = false;
+    private boolean isBlueTeam = true;  // NEW: Default Blue Team
 
 
     private String serverIp = "10.107.137.167";
@@ -125,6 +129,7 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences("ZMQ_PREFS", MODE_PRIVATE);
         serverIp = prefs.getString("IP", serverIp);
         serverPort = prefs.getInt("PORT", serverPort);
+        isBlueTeam = prefs.getBoolean("IS_BLUE_TEAM", true);  // NEW: Load saved team
 
         // Get IP address
         myIpAddress = getIPAddress();
@@ -138,6 +143,7 @@ public class MainActivity extends AppCompatActivity {
         btnRotateRight = findViewById(R.id.btnRotateRight);
         btnRotateLeft = findViewById(R.id.btnRotateLeft);
         modeSwitch = findViewById(R.id.modeSwitch);
+        modeSwitch2 = findViewById(R.id.teamSwitch);  // NEW: Init KFS Team Switch
         modeStatusText = findViewById(R.id.modeStatusText);
 
         gripper1 = findViewById(R.id.gripper);
@@ -157,6 +163,27 @@ public class MainActivity extends AppCompatActivity {
         setupPresetButtons();
         setupGripperButton();
 //        setupSendIPButton();
+
+        // NEW: Setup KFS Team Switch
+        modeSwitch2.setChecked(isBlueTeam);
+        modeSwitch2.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            isBlueTeam = isChecked;
+            updateTeamDisplay();
+
+            // Save preference
+            prefs.edit().putBoolean("IS_BLUE_TEAM", isBlueTeam).apply();
+
+            if (isConnected) {
+                if (isBlueTeam) {
+                    sendTeamCommand("KFS-Blue");
+                    Toast.makeText(this, "Team: Blue", Toast.LENGTH_SHORT).show();
+                } else {
+                    sendTeamCommand("KFS-Red");
+                    Toast.makeText(this, "Team: Red", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        updateTeamDisplay();  // Set tampilan awal
 
         modeSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             isManualMode = isChecked;
@@ -361,7 +388,7 @@ public class MainActivity extends AppCompatActivity {
     private void setupSliderListeners() {
         gripper1.addOnChangeListener((slider, value, fromUser) -> {
             valA = value;
-            tvGripper1Value.setText(String.format("Gripper 1: %.2f", valA));
+            tvGripper1Value.setText(String.format("Motor 1: %.2f", valA));
 
             if (isConnected && isManualMode) {
                 sendSliderData();
@@ -370,7 +397,7 @@ public class MainActivity extends AppCompatActivity {
 
         gripper2.addOnChangeListener((slider, value, fromUser) -> {
             valB = value;
-            tvGripper2Value.setText(String.format("Gripper 2: %.2f", valB));
+            tvGripper2Value.setText(String.format("Motor 2: %.2f", valB));
 
             if (isConnected && isManualMode) {
                 sendSliderData();
@@ -380,7 +407,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendSliderData() {
         if (socket != null && isConnected && isManualMode) {
-            String msg = String.format("SLIDER:%.2f,%.2f", valA, valB);
+            String msg = String.format(Locale.US,"SLIDER:%.2f,%.2f", valA, valB);
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent slider data: " + msg);
         }
@@ -393,8 +420,8 @@ public class MainActivity extends AppCompatActivity {
         gripper1.setValue(0f);
         gripper2.setValue(0f);
 
-        tvGripper1Value.setText("Gripper 1: 0.00");
-        tvGripper2Value.setText("Gripper 2: 0.00");
+        tvGripper1Value.setText("Motor 1: 0.00");
+        tvGripper2Value.setText("Motor 2: 0.00");
 
         isGripping = false;
         if (btnGripper != null) {
@@ -447,6 +474,27 @@ public class MainActivity extends AppCompatActivity {
                 btnGripper.setText("GRIPPER");
                 btnGripper.setBackgroundColor(getResources().getColor(android.R.color.darker_gray));
             }
+        }
+    }
+
+    // NEW: Update tampilan KFS Team Switch
+    private void updateTeamDisplay() {
+        if (isBlueTeam) {
+            // Blue Team - Switch ON
+            modeSwitch2.setText("Blue");
+            modeSwitch2.setTextColor(getResources().getColor(android.R.color.holo_blue_dark));
+        } else {
+            // Red Team - Switch OFF
+            modeSwitch2.setText("Red");
+            modeSwitch2.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+        }
+    }
+
+    // NEW: Kirim perintah team ke server
+    private void sendTeamCommand(String team) {
+        if (socket != null && isConnected) {
+            socket.send(team.getBytes(ZMQ.CHARSET));
+            Log.d("ZMQ", "Sent team command: " + team);
         }
     }
 
@@ -556,6 +604,13 @@ public class MainActivity extends AppCompatActivity {
                         sendModeCommand("AUTO");
                     }
                     sendIPAddress();
+
+                    // NEW: Kirim team command saat connect
+                    if (isBlueTeam) {
+                        sendTeamCommand("KFS-Blue");
+                    } else {
+                        sendTeamCommand("KFS-Red");
+                    }
                 });
             } catch (Exception e) {
                 Log.e("ZMQ", "Connection failed", e);
@@ -568,7 +623,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void sendCoordinate(float x, float y) {
         if (socket != null && isConnected && isManualMode) {
-            String msg = x + "," + y;
+            String msg = String.format(Locale.US, "%.2f,%.2f", x, y);
             socket.send(msg.getBytes(ZMQ.CHARSET));
             Log.d("ZMQ", "Sent: " + msg);
         }

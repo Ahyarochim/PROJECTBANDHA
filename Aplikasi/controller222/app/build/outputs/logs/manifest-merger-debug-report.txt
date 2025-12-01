@@ -113,11 +113,11 @@ MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\an
 	android:fullBackupContent
 		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:13:9-54
 	android:roundIcon
-		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:16:9-54
+		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:16:9-59
 	tools:targetApi
 		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:20:9-29
 	android:icon
-		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:14:9-39
+		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:14:9-48
 	android:allowBackup
 		ADDED from C:\bandha\project2 komunikasi\PROJECTBANDHA\Aplikasi\controller222\app\src\main\AndroidManifest.xml:11:9-35
 	android:theme

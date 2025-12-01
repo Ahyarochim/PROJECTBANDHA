@@ -328,7 +328,7 @@ class ZMQRobotServer:
 if __name__ == "__main__":
     # Konfigurasi
     ZMQ_PORT = 6000  # Port yang sama dengan Android
-    SERIAL_PORT = '/dev/ttyACM0'  # Sesuaikan dengan port STM32 Anda
+    SERIAL_PORT = 'COM3'  # Sesuaikan dengan port STM32 Anda
     # Linux: '/dev/ttyUSB0' atau '/dev/ttyACM0'
     # Windows: 'COM3', 'COM4', dll
     BAUD_RATE = 115200

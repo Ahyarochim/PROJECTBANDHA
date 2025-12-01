@@ -14,6 +14,21 @@
 
     <!-- Connect Button -->
 
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/teamSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:checked="true"
+        android:text="Blue"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/btnSetting"
+        app:layout_constraintHorizontal_bias="0.172"
+        app:layout_constraintStart_toEndOf="@+id/videoStream"
+        app:layout_constraintTop_toBottomOf="@+id/modeSwitch"
+        app:layout_constraintVertical_bias="0.004"
+        app:thumbTint="#AA5EE0"
+        app:trackTint="#E0E0E0" />
+
     <ImageView
         android:id="@+id/videoStream"
         android:layout_width="480px"
@@ -214,7 +229,7 @@
         android:id="@+id/tvGripper1Value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Gripper 1: 0.00"
+        android:text="Motor 1: 0.00"
         android:textColor="@color/black"
         android:textSize="14sp"
         android:textStyle="bold"
@@ -232,7 +247,7 @@
         android:id="@+id/tvGripper2Value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Gripper 2: 0.00"
+        android:text="Motor 2: 0.00"
         android:textColor="@color/black"
         android:textSize="14sp"
         android:textStyle="bold"

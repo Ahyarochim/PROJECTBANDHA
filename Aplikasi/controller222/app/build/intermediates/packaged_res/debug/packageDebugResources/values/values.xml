@@ -12,7 +12,7 @@
     <color name="white">#FFFFFFFF</color>
     <dimen name="activity_horizontal_margin">16dp</dimen>
     <dimen name="activity_vertical_margin">16dp</dimen>
-    <string name="app_name">Robotic Arm</string>
+    <string name="app_name">Controller2</string>
     <string name="title_activity_home">HOME</string>
     <string name="title_dashboard">Dashboard</string>
     <string name="title_home">Home</string>

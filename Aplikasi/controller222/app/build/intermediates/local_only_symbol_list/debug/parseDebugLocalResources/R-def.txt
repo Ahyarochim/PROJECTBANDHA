@@ -19,6 +19,12 @@ drawable ic_dashboard_black_24dp
 drawable ic_home_black_24dp
 drawable ic_launcher_background
 drawable ic_launcher_foreground
+drawable ic_launcher_new1_background
+drawable ic_launcher_new1_foreground
+drawable ic_launcher_new2_background
+drawable ic_launcher_new2_foreground
+drawable ic_launcher_new_background
+drawable ic_launcher_new_foreground
 drawable ic_notifications_black_24dp
 drawable image
 drawable ip
@@ -50,6 +56,7 @@ id modeSwitch
 id preset1
 id preset2
 id scrollContent
+id teamSwitch
 id tvGripper1Value
 id tvGripper2Value
 id tvStatus
@@ -60,6 +67,12 @@ layout activity_controller
 layout dialog_ip_port
 menu bottom_nav_menu
 mipmap ic_launcher
+mipmap ic_launcher_new
+mipmap ic_launcher_new1
+mipmap ic_launcher_new1_round
+mipmap ic_launcher_new2
+mipmap ic_launcher_new2_round
+mipmap ic_launcher_new_round
 mipmap ic_launcher_round
 string app_name
 string title_activity_home
