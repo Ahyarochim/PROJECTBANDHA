@@ -20,9 +20,6 @@ import traceback
 import queue
 import msgpack
 
-# ========================
-# CONFIGURATION
-# ========================
 class RobotMode(Enum):
     MANUAL = 1
     AUTONOMOUS = 2
@@ -35,8 +32,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'C:\bandha\project2 komunikasi\PROJECTBANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'C:\bandha\project2 komunikasi\PROJECTBANDHA\Calibration_Matrix.yaml'
+model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
+yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -61,9 +58,7 @@ BRIGHTNESS_FACTOR = 1.5
 DEBUG = True
 USE_UNDISTORT = False
 
-# ========================
-# INTEGRATED SERVER CLASS
-# ========================
+
 class IntegratedRobotServer:
     def __init__(self):
         """Integrated server: ZMQ control + Vision + Video streaming"""
@@ -112,6 +107,7 @@ class IntegratedRobotServer:
         self.rotate_value = 0
         self.motor1_value = 0.0
         self.reset_state=0
+        self.last_move_time =0.0
 
         #==== Auto-Grip State ====
         # counters (frame-based)
@@ -139,7 +135,7 @@ class IntegratedRobotServer:
         # States: None, 'STOPPING', 'LOWERING', 'WAITING', 'MOVING'
         self.yellow_state = None
         self.yellow_state_timestamp = 0.0
-        self.YELLOW_WAIT_TIME = 10.0  # Wait 10 seconds after lowering gripper
+        self.YELLOW_WAIT_TIME = 4.0  # Wait 10 seconds after lowering gripper
         
         # NEW: Green state machine untuk delay sebelum grip
         # States: None, 'WAITING', 'GRIPPING'
@@ -209,7 +205,6 @@ class IntegratedRobotServer:
             self.ser.close()
             self.serial_connected = False
             print("[SERIAL] Disconnected")
-    
     def send_to_stm(self):
         """Send data to STM32"""
         if not self.serial_connected or not self.ser:
@@ -218,7 +213,7 @@ class IntegratedRobotServer:
             return False
         
         try:
-            # Format berdasarkan tipe command
+
             if self.last_command_type == 'joystick':
                 data_str = f"JOY,{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
             elif self.last_command_type == 'slider':
@@ -233,16 +228,16 @@ class IntegratedRobotServer:
                 data_str = f"ROT,{self.rotate_value}\n"
             elif self.last_command_type == 'gripper_down':
                 # GUNAKAN FORMAT SLIDER: motor1 untuk naik/turun gripper
-                data_str = f"SLD,{self.gripper1:.2f},0.00\n"
+                data_str = f"{self.gripper1:.2f},0.00\n"
             elif self.last_command_type == 'gripper_on':
-                data_str = "1\n"
+                data_str = "GRP,1\n"
             elif self.last_command_type == 'gripper_off':
-                data_str = "0\n"
+                data_str = "GRP,0\n"
             elif self.last_command_type == 'move_forward' or self.last_command_type == 'stop':
                 # GUNAKAN FORMAT JOYSTICK: x,y untuk arah gerakan
                 # move_forward: 0,1.0 (maju penuh)
                 # stop: 0,0 (berhenti)
-                data_str = f"{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
+                data_str = f"JOY,{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
             else:
                 data_str = f"{self.motor1_value:.2f}\n"
             
@@ -274,8 +269,8 @@ class IntegratedRobotServer:
                 
                 if old_ip != ip:
                     print(f"\n{'='*60}")
-                    print(f"[ZMQ] ✅ Client connected: {self.android_ip}")
-                    print(f"[ZMQ] 🎥 Switching to UNICAST mode")
+                    print(f"[ZMQ] Client connected: {self.android_ip}")
+                    print(f"[ZMQ] Switching to UNICAST mode")
                     print(f"{'='*60}\n")
                 return
             
@@ -285,9 +280,8 @@ class IntegratedRobotServer:
                 self.preset_num = int(msg.split(":")[1])
                 print(f"[PRESET] Num: {self.preset_num}")
                 self.send_to_stm()
-            
+            # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
             elif msg.startswith("GRIPPER:"):
-                # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
                 self.last_command_type = 'gripper_toggle'
                 state= int(msg.split(":")[1])
                 self.gripper_state = 1 if state == 1 else 0
@@ -354,32 +348,29 @@ class IntegratedRobotServer:
                 # Cek apakah ada perubahan ke 0.0,0.0
                 if (self.joystick_x != 0.0 or self.joystick_y != 0.0) and \
                    (new_x == 0.0 and new_y == 0.0):
-                    # Kirim 0.0,0.0 DUA KALI untuk verifikasi
                     self.joystick_x = new_x
                     self.joystick_y = new_y
                     print(f"[JOYSTICK] {msg} (STOP - sending twice)")
                     self.send_to_stm()
-                    time.sleep(0.05)  # Delay 50ms
-                    self.send_to_stm()  # Kirim lagi
-                    time.sleep(0.05)  # Delay 50ms
+                    time.sleep(0.05)  
+                    self.send_to_stm()  
+                    time.sleep(0.05)  
                     self.send_to_stm()
-                    time.sleep(0.05)  # Delay 50ms
+                    time.sleep(0.05)  
                     self.send_to_stm()
                 else:
-                    # Update normal
                     self.joystick_x = new_x
                     self.joystick_y = new_y
                     print(f"[JOYSTICK] {msg}")
                     self.send_to_stm()
 
             elif len(parts) == 1:
-                # Motor1 value only
                 self.last_command_type = None
                 self.motor1_value = float(parts[0])
                 print(f"[MOTOR1] Value: {self.motor1_value:.2f}")
                 self.send_to_stm()
             else:
-                    print(f"[WARN] Invalid format (got {len(parts)} values)")
+                print(f"[WARN] Invalid format (got {len(parts)} values)")
 
         except ValueError as e:
             print(f"[ERROR] Parsing error: {e}")
@@ -401,10 +392,7 @@ class IntegratedRobotServer:
                 if DEBUG:
                     print(f"[ZMQ] Error: {e}")
                 time.sleep(0.1)
-    
-    # ========================
-    # VISION PROCESSING
-    # ========================
+# ======== VISION =====
     def load_calibration(self, path):
         """Load camera calibration"""
         try:
@@ -666,12 +654,15 @@ class IntegratedRobotServer:
                     self.green_state = None   # Reset green state
                     cv2.putText(annotated, f"COOLDOWN {int(self.pickup_cooldown_until - now)}s", (20,20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,255), 2)
+                    remaining = int(self.pickup_cooldown_until - now)
+                    cv2.putText(annotated, f"COOLDOWN: {remaining}s", (20,50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0,255,255), 3)
                 else:
                     with self.priority_lock:
                         current_priority = self.priority_team
     
     # Cek mode: harus AUTO (dari Android dikirim sebagai "MODE:AUTO")
-                is_autonomous = (self.mode_value == "AUTO")
+                is_autonomous = (self.mode_value.upper() == "AUTO")
     
                 if self.auto_grip_enabled and is_autonomous and detected and lab == current_priority:
                     # GREEN INDICATOR LOGIC (WITH DELAY BEFORE GRIP)
@@ -735,6 +726,26 @@ class IntegratedRobotServer:
                                 self.red_stable_count = 0
                                 self.yellow_state = None
                                 self.green_state = None
+                            elif self.green_state == 'GRIPPING':
+                                # Tunggu 1-2 detik setelah grip
+                                if (now - self.green_state_timestamp) >= 2.0:
+                                    self.last_command_type = 'gripper_up'
+                                    self.gripper1 = -0.5  # Nilai negatif untuk naik (sesuaikan dengan STM32)
+                                    sent = self.send_to_stm()
+                                    self.green_state = 'RAISING'
+        
+                                    print(f"\n{'='*60}")
+                                    print(f"[AUTO-GRIP] ⬆️ GRIPPER UP SENT! (Step 4/4)")
+                                    print(f"[AUTO-GRIP] Command: SLD,{self.gripper1:.2f},0.00")
+                                    print(f"[AUTO-GRIP] Success: {sent}")
+                                    print(f"{'='*60}\n")
+        
+                                    self.pickup_cooldown_until = now + self.post_pickup_pause
+                                    self.green_stable_count = 0
+                                    self.yellow_stable_count = 0
+                                    self.red_stable_count = 0
+                                    self.yellow_state = None
+                                    self.green_state = None
                     
                     # YELLOW INDICATOR LOGIC (MULTI-STEP STATE MACHINE)
                     elif color == (0, 255, 255):
@@ -818,23 +829,22 @@ class IntegratedRobotServer:
                         # Hanya print di milestone frames (5, 10, 15) untuk mengurangi spam
                         if DEBUG and (self.red_stable_count % 5 == 0 or self.red_stable_count == self.RED_STABLE_FRAMES):
                             print(f"[AUTO-GRIP] 🔴 RED indicator stable: {self.red_stable_count}/{self.RED_STABLE_FRAMES} frames")
-                        
-                        # NEW: Kirim command MAJU saat RED stabil
-                        if self.red_stable_count >= self.RED_STABLE_FRAMES and not self.move_forward_sent:
-                            # MAJU dengan joystick 0,1.0 (maju penuh)
-                            self.last_command_type = 'move_forward'
-                            self.joystick_x = 0.0
-                            self.joystick_y = 1.0  # Maju penuh
-                            sent = self.send_to_stm()
-                            self.move_forward_sent = True  # Set flag agar tidak repeat
+                        if self.red_stable_count >= self.RED_STABLE_FRAMES:
+                            if not self.move_forward_sent or (now - self.last_move_time) > 0.5:
+                                self.last_command_type = 'move_forward'
+                                self.joystick_x = 0.0
+                                self.joystick_y = 1.0  # Maju penuh
+                                sent = self.send_to_stm()
+                                self.move_forward_sent = True  # Set flag agar tidak repeat
+                                self.last_move_time = now
                             
-                            print(f"\n{'='*60}")
-                            print(f"[AUTO-GRIP] ➡️ MOVE FORWARD SENT! (ONCE)")
-                            print(f"[AUTO-GRIP] Command: Joystick 0.0,1.0 (FORWARD)")
-                            print(f"[AUTO-GRIP] Success: {sent}")
-                            print(f"[AUTO-GRIP] Red frames: {self.red_stable_count}")
-                            print(f"[AUTO-GRIP] Target: YELLOW indicator")
-                            print(f"{'='*60}\n")
+                                print(f"\n{'='*60}")
+                                print(f"[AUTO-GRIP] ➡️ MOVE FORWARD SENT! (ONCE)")
+                                print(f"[AUTO-GRIP] Command: Joystick 0.0,1.0 (FORWARD)")
+                                print(f"[AUTO-GRIP] Success: {sent}")
+                                print(f"[AUTO-GRIP] Red frames: {self.red_stable_count}")
+                                print(f"[AUTO-GRIP] Target: YELLOW indicator")
+                                print(f"{'='*60}\n")
                 else:
                         # Reset semua counter jika kondisi tidak terpenuhi
                         if self.yellow_stable_count > 0 or self.green_stable_count > 0 or self.red_stable_count > 0:
@@ -853,10 +863,11 @@ class IntegratedRobotServer:
                         self.red_stable_count    = 0
                         self.gripper_down_sent   = False
                         self.move_forward_sent   = False
-                        self.yellow_state        = None  # Reset yellow state
-                        self.green_state         = None  # Reset green state
+                        if self.yellow_state not in ['LOWERING', 'WAITING', 'MOVING']:
+                            self.yellow_state = None
+                        if self.green_state not in ['STOPPING', 'WAITING', 'GRIPPING']:
+                            self.green_state = None
                 
-                # Draw crosshair
                 cv2.line(annotated, (center_x, 0), (center_x, rot_h), color, 2)
                 cv2.line(annotated, (0, center_y), (rot_w, center_y), color, 2)
                 cv2.rectangle(annotated, (center_x - margin, center_y - margin), (center_x + margin, center_y + margin), color, 2)
