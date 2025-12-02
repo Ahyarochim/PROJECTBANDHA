@@ -32,8 +32,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Azqya Old Code 2\BANDAYUDHA\PROJECTBANDHA\Calibration_Matrix.yaml'
+model_path = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Komunikasi\server\best (1).pt'
+yml_File = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -101,8 +101,8 @@ class IntegratedRobotServer:
         self.joystick_y = 0.0
         self.gripper1 = 0.0
         self.gripper2 = 0.0
+        self.gripper3 = 0.0
         self.preset_num = 0
-        self.gripper_state = "OFF"
         self.mode_value = "MANUAL"
         self.rotate_value = 0
         self.motor1_value = 0.0
@@ -217,22 +217,22 @@ class IntegratedRobotServer:
             if self.last_command_type == 'joystick':
                 data_str = f"JOY,{self.joystick_x:.2f},{self.joystick_y:.2f}\n"
             elif self.last_command_type == 'slider':
-                data_str = f"SLD,{self.gripper1:.2f},{self.gripper2:.2f}\n"
+                data_str = f"SLD,{self.gripper1:.2f},{self.gripper2:.2f},{self.gripper3:.2f}\n"
             elif self.last_command_type == 'preset':
                 data_str = f"PRE,{self.preset_num}\n"
-            elif self.last_command_type == 'gripper_toggle':
-                data_str = f"GRP,{self.gripper_state}\n"
+            # elif self.last_command_type == 'gripper_toggle':
+            #     data_str = f"GRP,{self.gripper_state}\n"
             elif self.last_command_type == 'mode':
                 data_str = f"MOD,{self.mode_value}\n"
             elif self.last_command_type == 'rotate':
                 data_str = f"ROT,{self.rotate_value}\n"
             elif self.last_command_type == 'gripper_down':
                 # GUNAKAN FORMAT SLIDER: motor1 untuk naik/turun gripper
-                data_str = f"{self.gripper1:.2f},0.00\n"
+                data_str = f"{self.gripper1:.2f},{self.gripper2:.2f},{self.gripper3:.2f}\n"
             elif self.last_command_type == 'gripper_on':
-                data_str = "GRP,1\n"
+                data_str = "ON"
             elif self.last_command_type == 'gripper_off':
-                data_str = "GRP,0\n"
+                data_str = "OFF"
             elif self.last_command_type == 'move_forward' or self.last_command_type == 'stop':
                 # GUNAKAN FORMAT JOYSTICK: x,y untuk arah gerakan
                 # move_forward: 0,1.0 (maju penuh)
@@ -281,12 +281,12 @@ class IntegratedRobotServer:
                 print(f"[PRESET] Num: {self.preset_num}")
                 self.send_to_stm()
             # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
-            elif msg.startswith("GRIPPER:"):
-                self.last_command_type = 'gripper_toggle'
-                state= int(msg.split(":")[1])
-                self.gripper_state = 1 if state == 1 else 0
-                print(f"[GRIPPER] State: {self.gripper_state}")
-                self.send_to_stm()
+            # elif msg.startswith("GRIPPER:"):
+            #     self.last_command_type = 'gripper_toggle'
+            #     state= int(msg.split(":")[1])
+            #     self.gripper_state = 1 if state == 1 else 0
+            #     print(f"[GRIPPER] State: {self.gripper_state}")
+            #     self.send_to_stm()
             
             elif msg.startswith("MODE:"):
                 self.last_command_type = 'mode'
@@ -298,10 +298,11 @@ class IntegratedRobotServer:
                 self.last_command_type = 'slider'
                 data_part = msg.split(":", 1)[1]
                 parts = data_part.split(",")
-                if len(parts) == 2:
+                if len(parts) == 3:
                     self.gripper1 = float(parts[0])
                     self.gripper2 = float(parts[1])
-                    print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}")
+                    self.gripper3 = float(parts[2])
+                    print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}, G3: {self.gripper3:.2f}")
                     self.send_to_stm()
             
             elif msg.startswith("ROTATE:"):
