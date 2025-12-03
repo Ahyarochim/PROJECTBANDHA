@@ -32,8 +32,8 @@ BAUD_RATE = 115200
 ZMQ_PORT = 6000
 
 # Vision Config
-model_path = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Komunikasi\server\best (1).pt'
-yml_File = r'D:\Ahya Rochim\Kuliah\BANDHAYUDHA\PROJECT BANDHA\Calibration_Matrix.yaml'
+model_path = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Komunikasi/server/best (1).pt'
+yml_File = r'/home/hasha/Documents/Intern/project_besar/PROJECTBANDHA/Calibration_Matrix.yaml'
 
 # Camera Config
 REQ_W, REQ_H = 360, 400
@@ -186,14 +186,30 @@ class IntegratedRobotServer:
         
 
         self.buffer_conf = deque(maxlen=5)
+        # Server info
+        self.running = True
+        self.server_ip = self.get_server_ip()
+        self.udp_error_logged = False  # Flag untuk suppress spam UDP error
         
-        self.running = False
-        
-        print(f"[INIT] Integrated Robot Server initialized")
+        print("[INIT] Integrated Robot Server initialized")
         print(f"[INIT] ZMQ Port: {ZMQ_PORT}")
         print(f"[INIT] Serial: {SERIAL_PORT}")
         print(f"[INIT] YOLO Device: {self.device}")
+        print(f"[INIT] Server IP: {self.server_ip}")
+        print(f"[INIT] UDP Video Port: {ZMQ_PORT}")
 
+    def get_server_ip(self):
+        """Get server IP address"""
+        try:
+            # Create dummy socket to get local IP
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except:
+            return "Unknown"
+    
     def connect_serial(self):
         """Connect to STM32 via Serial"""
         try:
@@ -290,9 +306,10 @@ class IntegratedRobotServer:
                 
                 if old_ip != ip:
                     print(f"\n{'='*60}")
-                    print(f"[ZMQ] Client connected: {self.android_ip}")
-                    print(f"[ZMQ] Switching to UNICAST mode")
+                    print(f"[ZMQ] ✅ Client connected: {self.android_ip}")
+                    print(f"[ZMQ] 🎥 Switching to UNICAST mode")
                     print(f"{'='*60}\n")
+                    self.udp_error_logged = False  # Reset error flag saat client connect
                 return
             
             # Command parsing
@@ -301,6 +318,7 @@ class IntegratedRobotServer:
                 self.preset_num = int(msg.split(":")[1])
                 print(f"[PRESET] Num: {self.preset_num}")
                 self.send_to_stm()
+                return  # CRITICAL: Prevent fallthrough to joystick parser
             # GRIPPER:GRIP_ON atau GRIPPER:GRIP_OFF
             # elif msg.startswith("GRIPPER:"):
             #     self.last_command_type = 'gripper_toggle'
@@ -314,6 +332,7 @@ class IntegratedRobotServer:
                 self.mode_value = msg.split(":")[1]
                 print(f"[MODE] Value: {self.mode_value}")
                 self.send_to_stm()
+                return  # CRITICAL: Prevent fallthrough to joystick parser
             
             elif msg.startswith("SLIDER:"):
                 self.last_command_type = 'slider'
@@ -325,12 +344,14 @@ class IntegratedRobotServer:
                     self.gripper3 = float(parts[2])
                     print(f"[SLIDER] G1: {self.gripper1:.2f}, G2: {self.gripper2:.2f}, G3: {self.gripper3:.2f}")
                     self.send_to_stm()
+                return  # CRITICAL: Prevent fallthrough to joystick parser
             
             elif msg.startswith("ROTATE:"):
                 self.last_command_type = 'rotate'
                 self.rotate_value = int(msg.split(":")[1])
                 print(f"[ROTATE] Value: {self.rotate_value}")
                 self.send_to_stm()
+                return  # CRITICAL: Prevent fallthrough to joystick parser
             
             elif msg.startswith("TEAM:"):
                 # TEAM:KFS-Blue atau TEAM:KFS-Red
@@ -344,6 +365,7 @@ class IntegratedRobotServer:
                     print(f"[TEAM] 🎯 Priority changed: {self.priority_team}")
                     print(f"[TEAM] Detection will prioritize: {team}")
                     print(f"{'='*60}\n")
+                return  # CRITICAL: Prevent fallthrough to joystick parser
             
             # Handle team commands WITHOUT prefix (Android sends "KFS-Blue" or "KFS-Red" directly)
             elif msg == "KFS-Blue" or msg == "KFS-Red":
@@ -356,6 +378,7 @@ class IntegratedRobotServer:
                     print(f"[TEAM] 🎯 Priority changed: {self.priority_team}")
                     print(f"[TEAM] Detection will prioritize: {msg}")
                     print(f"{'='*60}\n")
+                return  # CRITICAL: Prevent fallthrough to joystick parser
             
             else:
                 # Numeric data (CSV atau single value)
@@ -493,6 +516,19 @@ class IntegratedRobotServer:
                     frame_to_send = sender_q.get(timeout=0.1)
                 except queue.Empty:
                     continue
+                
+                # Check if client is connected
+                with self.android_ip_lock:
+                    target_ip = self.android_ip
+                
+                # Skip sending if no client connected (NO BROADCAST!)
+                if target_ip is None:
+                    try:
+                        sender_q.task_done()
+                    except:
+                        pass
+                    continue
+                
                 try:
                     ok, buf = cv2.imencode('.jpg', frame_to_send, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY_SEND])
                     if not ok:
@@ -500,15 +536,12 @@ class IntegratedRobotServer:
                     data = buf.tobytes()
                     header = f"{len(data):08d}".encode('ascii')
                     
-                    with self.android_ip_lock:
-                        target_ip = self.android_ip if self.android_ip else "255.255.255.255"
-                    
                     last_sent_size = len(data)
                     self.udp_socket.sendto(header + data, (target_ip, ZMQ_PORT))
                     sent_counter += 1
                 except Exception as e:
                     if DEBUG:
-                        print(f"[WARN] Send error: {e}")
+                        print(f"[WARN] Send error to {target_ip}: {e}")
                 finally:
                     try:
                         sender_q.task_done()
@@ -920,7 +953,7 @@ class IntegratedRobotServer:
                     current_fps = fps_frame_count / elapsed
                     
                     with self.android_ip_lock:
-                        target_mode = f"UNICAST ({self.android_ip})" if self.android_ip else "BROADCAST"
+                        target_mode = f"UNICAST ({self.android_ip})" if self.android_ip else "WAITING"
                     
                     print(f"[METRICS] FPS={current_fps:.1f} | sent={sent_counter} | dropped={dropped_counter} | mode={target_mode}")
                     
