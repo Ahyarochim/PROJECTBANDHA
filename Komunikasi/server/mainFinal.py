@@ -58,6 +58,27 @@ BRIGHTNESS_FACTOR = 1.5
 DEBUG = True
 USE_UNDISTORT = False
 
+# ========================
+# IP ADDRESS
+# ========================
+def get_local_ip():
+    """Get local IP address of the laptop"""
+    try:
+        # Create a socket connection to determine local IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Connect to a public DNS server (doesn't actually send data)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception as e:
+        # Fallback: try getting hostname
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            return local_ip
+        except:
+            return "Unable to determine IP"
 
 class IntegratedRobotServer:
     def __init__(self):
@@ -976,6 +997,12 @@ if __name__ == "__main__":
     print("  - Serial Communication (to STM32)")
     print("="*60)
     print()
+    
+    # Display Local IP Address
+    local_ip = get_local_ip()
+    print(f"\n🌐 Server IP Address: {local_ip}")
+    print(f"📱 Connect your Android device to: {local_ip}:{ZMQ_PORT}")
+    print("="*60)
     
     server = IntegratedRobotServer()
     server.start()
